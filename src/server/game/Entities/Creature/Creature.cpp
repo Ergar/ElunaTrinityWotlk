@@ -876,6 +876,7 @@ void Creature::Update(uint32 diff)
         default:
             break;
     }
+    sScriptMgr->OnCreatureUpdate(this, diff);
 }
 
 void Creature::Regenerate(Powers power)
@@ -1488,6 +1489,7 @@ void Creature::UpdateLevelDependantStats()
 
     float armor = (float)stats->GenerateArmor(cInfo); /// @todo Why is this treated as uint32 when it's a float?
     SetStatFlatModifier(UNIT_MOD_ARMOR, BASE_VALUE, armor);
+    sScriptMgr->Creature_SelectLevel(cInfo, this);
 }
 
 float Creature::_GetHealthMod(int32 Rank)

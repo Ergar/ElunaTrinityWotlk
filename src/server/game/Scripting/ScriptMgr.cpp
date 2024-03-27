@@ -1368,6 +1368,17 @@ void ScriptMgr::OnWorldUpdate(uint32 diff)
     FOREACH_SCRIPT(WorldScript)->OnUpdate(diff);
 }
 
+void ScriptMgr::SetInitialWorldSettings()
+{
+    FOREACH_SCRIPT(WorldScript)->SetInitialWorldSettings();
+}
+
+float ScriptMgr::VAS_Script_Hooks()
+{
+    float VAS_Script_Hook_Version = 1.03f;
+    return VAS_Script_Hook_Version;
+}
+
 void ScriptMgr::OnHonorCalculation(float& honor, uint8 level, float multiplier)
 {
     FOREACH_SCRIPT(FormulaScript)->OnHonorCalculation(honor, level, multiplier);
@@ -1529,6 +1540,7 @@ void ScriptMgr::OnPlayerEnterMap(Map* map, Player* player)
     if (Eluna* e = map->GetEluna())
         e->OnPlayerEnter(map, player);
 #endif
+    FOREACH_SCRIPT(AllMapScript)->OnPlayerEnterAll(map, player);
 
     FOREACH_SCRIPT(PlayerScript)->OnMapChanged(player);
 
@@ -1554,6 +1566,7 @@ void ScriptMgr::OnPlayerLeaveMap(Map* map, Player* player)
     if(Eluna * e = map->GetEluna())
         e->OnPlayerLeave(map, player);
 #endif
+    FOREACH_SCRIPT(AllMapScript)->OnPlayerLeaveAll(map, player);
 
     SCR_MAP_BGN(WorldMapScript, map, itr, end, entry, IsWorldMap);
         itr->second->OnPlayerLeave(map, player);
@@ -2495,6 +2508,45 @@ void ScriptMgr::ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& dama
     FOREACH_SCRIPT(UnitScript)->ModifySpellDamageTaken(target, attacker, damage);
 }
 
+void ScriptMgr::ModifyVehiclePassengerExitPos(Unit* passenger, Vehicle* vehicle, Position& pos)
+{
+    FOREACH_SCRIPT(UnitScript)->ModifyVehiclePassengerExitPos(passenger, vehicle, pos);
+    FOREACH_SCRIPT(CreatureScript)->ModifyVehiclePassengerExitPos(passenger, vehicle, pos);
+}
+
+void ScriptMgr::ModifyHealRecieved(Unit * target, Unit * attacker, uint32 & damage)
+{
+    FOREACH_SCRIPT(UnitScript)->ModifyHealRecieved(target, attacker, damage);
+}
+
+//Called From Unit::DealDamage
+//uint32 ScriptMgr::DealDamage(Unit *AttackerUnit, Unit *pVictim, uint32 damage, DamageEffectType damagetype) {
+//    FOR_SCRIPTS_RET(UnitScript, itr, end, damage)damage = itr->second->DealDamage(AttackerUnit, pVictim, damage, damagetype);
+//    return damage;
+//}
+
+AllMapScript::AllMapScript(const char* name)
+ : ScriptObject(name)
+{
+    ScriptRegistry<AllMapScript>::Instance()->AddScript(this);
+}
+
+AllCreatureScript::AllCreatureScript(const char* name)
+ : ScriptObject(name)
+{
+    ScriptRegistry<AllCreatureScript>::Instance()->AddScript(this);
+}
+
+void ScriptMgr::OnCreatureUpdate(Creature * creature, uint32 diff)
+{
+    FOREACH_SCRIPT(AllCreatureScript)->OnAllCreatureUpdate(creature, diff);
+}
+
+void ScriptMgr::Creature_SelectLevel(const CreatureTemplate * cinfo, Creature * creature)
+{
+    FOREACH_SCRIPT(AllCreatureScript)->Creature_SelectLevel(cinfo, creature);
+}
+
 SpellScriptLoader::SpellScriptLoader(char const* name)
     : ScriptObject(name)
 {
@@ -3183,10 +3235,12 @@ template class TC_GAME_API ScriptRegistry<SpellScriptLoader>;
 template class TC_GAME_API ScriptRegistry<ServerScript>;
 template class TC_GAME_API ScriptRegistry<WorldScript>;
 template class TC_GAME_API ScriptRegistry<FormulaScript>;
+template class TC_GAME_API ScriptRegistry<AllMapScript>;
 template class TC_GAME_API ScriptRegistry<WorldMapScript>;
 template class TC_GAME_API ScriptRegistry<InstanceMapScript>;
 template class TC_GAME_API ScriptRegistry<BattlegroundMapScript>;
 template class TC_GAME_API ScriptRegistry<ItemScript>;
+template class TC_GAME_API ScriptRegistry<AllCreatureScript>;
 template class TC_GAME_API ScriptRegistry<CreatureScript>;
 template class TC_GAME_API ScriptRegistry<GameObjectScript>;
 template class TC_GAME_API ScriptRegistry<AreaTriggerScript>;

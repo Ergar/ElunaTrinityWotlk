@@ -20,6 +20,7 @@
 
 #include "Common.h"
 #include "Duration.h"
+#include "DataMap.h"
 #include "EventProcessor.h"
 #include "ModelIgnoreFlags.h"
 #include "MovementInfo.h"
@@ -222,6 +223,7 @@ class TC_GAME_API Object
         virtual std::string GetDebugInfo() const;
 
         Trinity::unique_weak_ptr<Object> GetWeakPtr() const { return m_scriptRef; }
+	DataMap CustomData;
 
     protected:
         Object();
@@ -310,7 +312,7 @@ class TC_GAME_API WorldObject : public Object, public WorldLocation
     public:
         virtual ~WorldObject();
 
-        virtual void Update([[maybe_unused]] uint32 time_diff);
+        virtual void Update(uint32 /*time_diff*/) { }
 
         void _Create(ObjectGuid::LowType guidlow, HighGuid guidhigh, uint32 phaseMask);
         void AddToWorld() override;
@@ -517,9 +519,9 @@ class TC_GAME_API WorldObject : public Object, public WorldLocation
         void SetFarVisible(bool on);
         bool IsVisibilityOverridden() const { return m_visibilityDistanceOverride.has_value(); }
         void SetVisibilityDistanceOverride(VisibilityDistanceType type);
-        void SetIsStoredInWorldObjectGridContainer(bool apply);
-        bool IsAlwaysStoredInWorldObjectGridContainer() const { return m_isStoredInWorldObjectGridContainer; }
-        bool IsStoredInWorldObjectGridContainer() const;
+        void SetWorldObject(bool apply);
+        bool IsPermanentWorldObject() const { return m_isWorldObject; }
+        bool IsWorldObject() const;
 
         uint32  LastUsedScriptID;
 
