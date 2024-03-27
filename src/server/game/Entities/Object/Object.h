@@ -312,7 +312,7 @@ class TC_GAME_API WorldObject : public Object, public WorldLocation
     public:
         virtual ~WorldObject();
 
-        virtual void Update(uint32 /*time_diff*/) { }
+        virtual void Update([[maybe_unused]] uint32 time_diff);
 
         void _Create(ObjectGuid::LowType guidlow, HighGuid guidhigh, uint32 phaseMask);
         void AddToWorld() override;
@@ -519,9 +519,9 @@ class TC_GAME_API WorldObject : public Object, public WorldLocation
         void SetFarVisible(bool on);
         bool IsVisibilityOverridden() const { return m_visibilityDistanceOverride.has_value(); }
         void SetVisibilityDistanceOverride(VisibilityDistanceType type);
-        void SetWorldObject(bool apply);
-        bool IsPermanentWorldObject() const { return m_isWorldObject; }
-        bool IsWorldObject() const;
+        void SetIsStoredInWorldObjectGridContainer(bool apply);
+        bool IsAlwaysStoredInWorldObjectGridContainer() const { return m_isStoredInWorldObjectGridContainer; }
+        bool IsStoredInWorldObjectGridContainer() const;
 
         uint32  LastUsedScriptID;
 
