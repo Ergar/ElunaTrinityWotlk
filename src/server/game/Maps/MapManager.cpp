@@ -175,10 +175,6 @@ Map::EnterState MapManager::PlayerCannotEnter(uint32 mapid, Player* player, bool
     if (player->IsGameMaster())
         return Map::CAN_ENTER;
 
-    //Other requirements
-    if (!player->Satisfy(sObjectMgr->GetAccessRequirement(mapid, targetDifficulty), mapid, true))
-        return Map::CANNOT_ENTER_UNSPECIFIED_REASON;
-
     char const* mapName = entry->MapName[player->GetSession()->GetSessionDbcLocale()];
 
     Group* group = player->GetGroup();
@@ -207,7 +203,10 @@ Map::EnterState MapManager::PlayerCannotEnter(uint32 mapid, Player* player, bool
             TC_LOG_DEBUG("maps", "MAP: Player '{}' has corpse in instance '{}' and can enter.", player->GetName(), mapName);
         }
         else
+        {
             TC_LOG_DEBUG("maps", "Map::CanPlayerEnter - player '{}' is dead but does not have a corpse!", player->GetName());
+            return Map::CANNOT_ENTER_CORPSE_IN_DIFFERENT_INSTANCE;
+        }
     }
 
     //Get instance where player's group is bound & its map
@@ -228,9 +227,13 @@ Map::EnterState MapManager::PlayerCannotEnter(uint32 mapid, Player* player, bool
             instanceIdToCheck = save->GetInstanceId();
 
         // instanceId can never be 0 - will not be found
-        if (!player->CheckInstanceCount(instanceIdToCheck) && !player->isDead())
+        if (!player->GetSession()->UpdateAndCheckInstanceCount(instanceIdToCheck) && !player->isDead())
             return Map::CANNOT_ENTER_TOO_MANY_INSTANCES;
     }
+
+    //Other requirements
+    if (!player->Satisfy(sObjectMgr->GetAccessRequirement(mapid, targetDifficulty), mapid, true))
+        return Map::CANNOT_ENTER_UNSPECIFIED_REASON;
 
     return Map::CAN_ENTER;
 }
