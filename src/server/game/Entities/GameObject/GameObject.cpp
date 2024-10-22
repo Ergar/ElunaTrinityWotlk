@@ -42,6 +42,7 @@
 #include "Transport.h"
 #include "UpdateFieldFlags.h"
 #include "World.h"
+#include "InstanceScript.h"
 #ifdef ELUNA
 #include "LuaEngine.h"
 #endif
@@ -805,8 +806,13 @@ void GameObject::Update(uint32 diff)
                         // Battleground gameobjects have data2 == 0 && data5 == 3
                         if (!goInfo->trap.diameter && goInfo->trap.cooldown == 3)
                             if (Player* player = target->ToPlayer())
+                            {
                                 if (Battleground* bg = player->GetBattleground())
                                     bg->HandleTriggerBuff(GetGUID());
+
+                                if (InstanceScript* instanceScript = player->GetInstanceScript())
+                                    instanceScript->HandleTriggerBuff(GetGUID());
+                            }
                     }
                     break;
                 }

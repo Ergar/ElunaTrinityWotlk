@@ -207,6 +207,8 @@ class TC_GAME_API InstanceScript : public ZoneScript
         void DoCastSpellOnNPCBot(Creature* bot, uint32 spell);
         //end npcbot
 
+        virtual void HandleTriggerBuff(ObjectGuid /*go_guid*/) { }
+
         // Handle open / close objects
         // * use HandleGameObject(0, boolen, GO); in OnObjectCreate in instance scripts
         // * use HandleGameObject(GUID, boolen, nullptr); in any other script
