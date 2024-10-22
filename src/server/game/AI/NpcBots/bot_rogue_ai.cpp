@@ -1020,7 +1020,7 @@ public:
 
             //Cold Blood
             if (AuraEffect const* bloo = me->GetAuraEffect(COLD_BLOOD_1, 0, me->GetGUID()))
-                if (bloo->IsAffectedOnSpell(spellInfo))
+                if (bloo->IsAffectingSpell(spellInfo))
                     crit_chance += 100.f;
 
             //Puncturing Wounds:
@@ -1047,7 +1047,7 @@ public:
                 crit_chance += 6.f;
             //Remorseless Attacks:
             if (AuraEffect const* remo = me->GetAuraEffect(REMORSELESS_ATTACKS_BUFF, 0, me->GetGUID()))
-                if (remo->IsAffectedOnSpell(spellInfo))
+                if (remo->IsAffectingSpell(spellInfo))
                     crit_chance += 40.f;
         }
 
@@ -1347,7 +1347,7 @@ public:
 
             //Remorseless Attacks: proc consume buff
             if (AuraEffect const* remo = me->GetAuraEffect(REMORSELESS_ATTACKS_BUFF, 0, me->GetGUID()))
-                if (remo->IsAffectedOnSpell(spellInfo))
+                if (remo->IsAffectingSpell(spellInfo))
                     me->RemoveAurasDueToSpell(REMORSELESS_ATTACKS_BUFF);
 
             //Relentless Strikes
@@ -1458,7 +1458,7 @@ public:
 
             //Cold Blood: handle proc
             if (AuraEffect const* bloo = me->GetAuraEffect(COLD_BLOOD_1, 0, me->GetGUID()))
-                if (bloo->IsAffectedOnSpell(spell))
+                if (bloo->IsAffectingSpell(spell))
                     me->RemoveAurasDueToSpell(COLD_BLOOD_1);
 
             //Combo point generating from effects

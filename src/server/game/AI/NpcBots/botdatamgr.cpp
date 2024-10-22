@@ -1908,7 +1908,7 @@ void BotDataMgr::CreateWanderingBotsSortedGear()
                             }
                         }
                         break;
-                    case ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_FIST:
+                    case ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_FIST_WEAPON:
                         if (proto.InventoryType == INVTYPE_WEAPON || proto.InventoryType == INVTYPE_WEAPONMAINHAND)
                         {
                             if (!is_caster_item)
