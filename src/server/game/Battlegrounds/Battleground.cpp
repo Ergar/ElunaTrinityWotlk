@@ -837,7 +837,7 @@ void Battleground::EndBattleground(uint32 winner)
                     BotMgr::ReviveBot(const_cast<Creature*>(bot));
                 else
                 {
-                    bot->GetBotAI()->UnsummonAll();
+                    bot->GetBotAI()->UnsummonAll(false);
                     const_cast<Creature*>(bot)->InterruptNonMeleeSpells(true);
                     const_cast<Creature*>(bot)->RemoveAllControlled();
                     const_cast<Creature*>(bot)->SetUnitFlag(UNIT_FLAG_IMMUNE);
@@ -992,7 +992,7 @@ void Battleground::RemovePlayerAtLeave(ObjectGuid guid, bool Transport, bool Sen
         {
             BotMap const* map = player->GetBotMgr()->GetBotMap();
             for (BotMap::const_iterator itr = map->begin(); itr != map->end(); ++itr)
-                RemovePlayerAtLeave(itr->first, Transport, SendPacket);
+                RemoveBotAtLeave(itr->first);
         }
         //end npcbot
     }
@@ -1480,7 +1480,14 @@ uint32 Battleground::GetFreeSlotsForTeam(uint32 Team) const
 
 bool Battleground::HasFreeSlots() const
 {
+    //npcbot
+    /*
+    //end npcbot
     return GetPlayersSize() < GetMaxPlayers();
+    //npcbot
+    */
+    return GetPlayersSize() + uint32(GetBots().size()) < GetMaxPlayers();
+    //end npcbot
 }
 
 void Battleground::BuildPvPLogDataPacket(WorldPacket& data)

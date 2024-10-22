@@ -4436,8 +4436,16 @@ AutoBalance.DisabledID = ""
 NpcBot.Enable = 1
 
 #
+#    NpcBot.LogToDB
+#        Description: Log bot events debug info to DB. Records will be kept up to 30 days
+#        Default:     1 - (Enable)
+#                     0 - (Disable)
+
+NpcBot.LogToDB = 1
+
+#
 #    NpcBot.MaxBots
-#        Description: Maximum number of bots allowed for players per level bracket:
+#        Description: Maximum number of bots player can hire per level bracket:
 #                     0-9, 10-19, 20,29, ... , 70-79, 80+.
 #        Default:     1,1,1,1,1,1,1,1,1 - (1 for all levels)
 #                     0,1,2,3,4,5,6,7,8 - (1 per 10 levels)
@@ -4447,10 +4455,18 @@ NpcBot.MaxBots = 1,1,1,1,1,1,1,1,1
 
 #
 #    NpcBot.MaxBotsPerClass
-#        Description: Maximum bots of each class allowed for players.
+#        Description: Maximum number of bots player can hire per bot class.
 #        Default:     0 - no limit
 
 NpcBot.MaxBotsPerClass = 0
+
+#
+#    NpcBot.MaxBotsPerAccount
+#        Description: Maximum total number of bots players can hire per account.
+#        Default:     0 - no limit
+#                     9 - up to 9 bots total per account
+
+NpcBot.MaxBotsPerAccount = 0
 
 #
 #    NpcBot.Botgiver.FilterRaces
@@ -4629,6 +4645,16 @@ NpcBot.DisableInstances = ""
 
 NpcBot.Limit.Dungeon = 1
 NpcBot.Limit.Raid    = 1
+
+#
+#    NpcBot.HideSpawns
+#        Description: Prevent inactive bots from entering world
+#        Note:        Botgiver npc will become the only way to hire bots
+#        Note2:       Only GM's presense will reveal bot's spawn location (temporarily)
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled, keep all spawned bots in world)
+
+NpcBot.HideSpawns = 1
 
 #
 #    NpcBot.Cost
@@ -4937,6 +4963,61 @@ NpcBot.WanderingBots.BG.TargetTeamPlayersCount.SA = 0
 NpcBot.WanderingBots.BG.TargetTeamPlayersCount.IC = 0
 
 #
+#    NpcBot.WanderingBots.Classes.<Class>.Enable
+#        Description: Allow players to hire bots of certain classes.
+#        Note:        Some non-standard class abilities may be unbalanced or game breaking.
+#        Default:     1 - (NpcBot.Classes.Warrior.Enable)
+#                     1 - (NpcBot.Classes.Paladin.Enable)
+#                     1 - (NpcBot.Classes.Hunter.Enable)
+#                     1 - (NpcBot.Classes.Rogue.Enable)
+#                     1 - (NpcBot.Classes.Priest.Enable)
+#                     1 - (NpcBot.Classes.DeathKnight.Enable)
+#                     1 - (NpcBot.Classes.Shaman.Enable)
+#                     1 - (NpcBot.Classes.Mage.Enable)
+#                     1 - (NpcBot.Classes.Warlock.Enable)
+#                     1 - (NpcBot.Classes.Druid.Enable)
+#                     0 - (NpcBot.Classes.Blademaster.Enable)
+#                     1 - (NpcBot.Classes.ObsidianDestroyer.Enable)
+#                     1 - (NpcBot.Classes.Archmage.Enable)
+#                     1 - (NpcBot.Classes.Dreadlord.Enable)
+#                     1 - (NpcBot.Classes.SpellBreaker.Enable)
+#                     1 - (NpcBot.Classes.DarkRanger.Enable)
+#                     1 - (NpcBot.Classes.Necromancer.Enable)
+#                     1 - (NpcBot.Classes.SeaWitch.Enable)
+#                     1 - (NpcBot.Classes.CryptLord.Enable)
+
+NpcBot.WanderingBots.Classes.Warrior.Enable           = 1
+NpcBot.WanderingBots.Classes.Paladin.Enable           = 1
+NpcBot.WanderingBots.Classes.Hunter.Enable            = 1
+NpcBot.WanderingBots.Classes.Rogue.Enable             = 1
+NpcBot.WanderingBots.Classes.Priest.Enable            = 1
+NpcBot.WanderingBots.Classes.DeathKnight.Enable       = 1
+NpcBot.WanderingBots.Classes.Shaman.Enable            = 1
+NpcBot.WanderingBots.Classes.Mage.Enable              = 1
+NpcBot.WanderingBots.Classes.Warlock.Enable           = 1
+NpcBot.WanderingBots.Classes.Druid.Enable             = 1
+NpcBot.WanderingBots.Classes.Blademaster.Enable       = 0
+NpcBot.WanderingBots.Classes.ObsidianDestroyer.Enable = 1
+NpcBot.WanderingBots.Classes.Archmage.Enable          = 1
+NpcBot.WanderingBots.Classes.Dreadlord.Enable         = 1
+NpcBot.WanderingBots.Classes.SpellBreaker.Enable      = 1
+NpcBot.WanderingBots.Classes.DarkRanger.Enable        = 1
+NpcBot.WanderingBots.Classes.Necromancer.Enable       = 1
+NpcBot.WanderingBots.Classes.SeaWitch.Enable          = 1
+NpcBot.WanderingBots.Classes.CryptLord.Enable         = 1
+
+#
+#    NpcBot.WanderingBots.SkipTarget.Questgiver
+#    NpcBot.WanderingBots.SkipTarget.Flightmaster
+#        Description: Make wandering bots skip certain npc types when selecting attack target.
+#        Note:        This option does not apply to npcs engaging the bot on their own accord.
+#        Default:     0 - (NpcBot.WanderingBots.SkipTarget.Questgiver)
+#                     0 - (NpcBot.WanderingBots.SkipTarget.Flightmaster)
+
+NpcBot.WanderingBots.SkipTarget.Questgiver   = 0
+NpcBot.WanderingBots.SkipTarget.Flightmaster = 0
+
+#
 #    NpcBot.HK.Enable
 #        Description: Count NPCBot kill at honor kill.
 #        Default:     1 - (Enabled)
@@ -4968,6 +5049,15 @@ NpcBot.HK.Achievements.Enable = 0
 #        Maximum:    10.0
 
 NpcBot.HK.Rate.Honor = 1.0
+
+#
+#    NpcBot.Premade.Enable
+#        Description: Enable joining BG as premade group while having NPCBots in group.
+#        Note:        Queued premade groups do not trigger BG bots generation.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+NpcBot.Premade.Enable = 0
 
 #
 ###################################################################################################

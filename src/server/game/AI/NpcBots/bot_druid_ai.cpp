@@ -81,7 +81,7 @@ enum DruidBaseSpells
     TREE_OF_LIFE_FORM_1                 = 33891,
     TRAVEL_FORM_1                       = 783,
     AQUATIC_FORM_1                      = 1066,
-    //FLIGHT_FORM_1                       = 0,//niy
+    FLIGHT_FORM_1                       = 33943,
     ABOLISH_POISON_1                    = 2893,//manual use only
     CURE_POISON_1                       = 8946,
     REMOVE_CURSE_1                      = 2782,
@@ -260,7 +260,7 @@ public:
         void KilledUnit(Unit* u) override { bot_ai::KilledUnit(u); }
         void EnterEvadeMode(EvadeReason why = EVADE_REASON_OTHER) override { bot_ai::EnterEvadeMode(why); }
         void MoveInLineOfSight(Unit* u) override { bot_ai::MoveInLineOfSight(u); }
-        void JustDied(Unit* u) override { removeShapeshiftForm(); UnsummonAll(); bot_ai::JustDied(u); }
+        void JustDied(Unit* u) override { removeShapeshiftForm(); UnsummonAll(false); bot_ai::JustDied(u); }
 
         uint8 GetBotStance() const override
         {
@@ -316,6 +316,9 @@ public:
                         break;
                     //case FORM_FLIGHT:
                     //case FORM_FLIGHT_EPIC:
+                    case DRUID_FLIGHT_FORM:
+                        me->RemoveAurasDueToSpell(GetSpell(FLIGHT_FORM_1));
+                        break;
                     default:
                         break;
                 }
@@ -1199,9 +1202,9 @@ public:
                     case DRUID_CAT_FORM:     sshift = GetSpell(CAT_FORM_1);         break;
                     case DRUID_MOONKIN_FORM: sshift = GetSpell(MOONKIN_FORM_1);     break;
                     case DRUID_TREE_FORM:    sshift = GetSpell(TREE_OF_LIFE_FORM_1);break;
-                    //case DRUID_FLIGHT_FORM:  sshift = GetSpell(FLIGHT_FORM_1);      break;
                     case DRUID_TRAVEL_FORM:  sshift = GetSpell(TRAVEL_FORM_1);      break;
                     case DRUID_AQUATIC_FORM: sshift = GetSpell(AQUATIC_FORM_1);     break;
+                    case DRUID_FLIGHT_FORM:  sshift = GetSpell(FLIGHT_FORM_1);      break;
                     case BOT_STANCE_NONE:    sshift = GetSpell(TRAVEL_FORM_1);      break;
                     default:                 sshift = 0;                            break;
                 }
@@ -1531,7 +1534,7 @@ public:
             {
                 Unit* target = master;
                 if (master->IsAlive()) return;
-                if (master->IsResurrectRequested()) return; //resurrected
+                if (master->IsResurrectRequested() || master->GetUInt32Value(PLAYER_SELF_RES_SPELL)) return; //resurrected
                 if (master->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
                     target = (Unit*)master->GetCorpse();
                 if (!target || !target->IsInWorld())
@@ -1558,7 +1561,7 @@ public:
                     Player* tPlayer = itr->GetSource();
                     Unit* target = tPlayer;
                     if (!tPlayer || tPlayer->IsAlive()) continue;
-                    if (tPlayer->IsResurrectRequested()) continue; //resurrected
+                    if (tPlayer->IsResurrectRequested() || tPlayer->GetUInt32Value(PLAYER_SELF_RES_SPELL)) continue; //resurrected
                     if (tPlayer->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
                         target = (Unit*)tPlayer->GetCorpse();
                     if (!target || !target->IsInWorld()) continue;
@@ -1572,7 +1575,7 @@ public:
             for (BotMap::const_iterator itr = botMap->begin(); itr != botMap->end(); ++itr)
             {
                 Creature* bot = itr->second;
-                if (bot && bot->IsInWorld() && !bot->IsAlive() && IsTank(bot) && me->GetDistance(bot) < 80)
+                if (bot && bot->IsInWorld() && !bot->IsAlive() && !bot->GetBotAI()->GetSelfRezSpell() && IsTank(bot) && me->GetDistance(bot) < 80)
                     targets.push_back(bot);
             }
 
@@ -1666,13 +1669,13 @@ public:
                         me->SetPowerType(POWER_MANA);
                     }
                     break;
-                //case DRUID_FLIGHT_FORM:
-                //    if (me->GetPowerType() != POWER_MANA)
-                //    {
-                //        //TC_LOG_ERROR("entities.player", "druid_bot::setStats(): has to set powerType to POWER_MANA (flight)");
-                //        me->SetPowerType(POWER_MANA);
-                //    }
-                //    break;
+                case DRUID_FLIGHT_FORM:
+                    if (me->GetPowerType() != POWER_MANA)
+                    {
+                        //TC_LOG_ERROR("entities.player", "druid_bot::setStats(): has to set powerType to POWER_MANA (flight)");
+                        me->SetPowerType(POWER_MANA);
+                    }
+                    break;
                 case BOT_STANCE_NONE:
                     if (me->GetPowerType() != POWER_MANA)
                     {
@@ -1761,7 +1764,7 @@ public:
             damage = int32(fdamage * (1.0f + pctbonus));
         }
 
-        void ApplyClassSpellCritMultiplierAll(Unit const* /*victim*/, float& crit_chance, SpellInfo const* spellInfo, SpellSchoolMask /*schoolMask*/, WeaponAttackType /*attackType*/) const override
+        void ApplyClassSpellCritMultiplierAll(Unit const* victim, float& crit_chance, SpellInfo const* spellInfo, SpellSchoolMask /*schoolMask*/, WeaponAttackType /*attackType*/) const override
         {
             //uint32 spellId = spellInfo->Id;
             uint32 baseId = spellInfo->GetFirstRankSpell()->Id;
@@ -1782,8 +1785,11 @@ public:
             //Eclipse (Lunar): 40% additional critical chance for Starfire
             if (lvl >= 50 && baseId == STARFIRE_1 && me->HasAura(ECLIPSE_LUNAR_BUFF))
                 crit_chance += 40.f;
+            //Improved Faerie Fire (part 2): 3% additional critical chance for all spells on target affected by Faerie Fire
+            if (GetSpec() == BOT_SPEC_DRUID_BALANCE && lvl >= 40 && victim && victim->HasAuraState(AURA_STATE_FAERIE_FIRE))
+                crit_chance += 3.f;
             //Natural Perfection: 3% additional critical chance for all spells
-            if ((GetSpec() == BOT_SPEC_DRUID_RESTORATION) && lvl >= 40)
+            if (GetSpec() == BOT_SPEC_DRUID_RESTORATION && lvl >= 40)
                 crit_chance += 3.f;
         }
 
@@ -2351,6 +2357,12 @@ public:
                             app->ChangeAmount((app->GetAmount() * 14) / 10);
                 }
             }
+            if ((baseId == FAERIE_FIRE_NORMAL_1 || baseId == FAERIE_FIRE_FERAL_1) && lvl >= 40)
+            {
+                //Improved Faerie Fire (part 1): incrase crit chance taken by 3% (effect2)
+                if (AuraEffect* faf = target->GetAuraEffect(SPELL_AURA_MOD_ATTACKER_SPELL_HIT_CHANCE, SPELLFAMILY_DRUID, 0x400, 0x0, 0x0, me->GetGUID()))
+                    faf->ChangeAmount(faf->GetAmount() + 3);
+            }
 
             OnSpellHitTarget(target, spell);
         }
@@ -2452,8 +2464,8 @@ public:
                 setStats(DRUID_TRAVEL_FORM);
             else if (baseId == AQUATIC_FORM_1)
                 setStats(DRUID_AQUATIC_FORM);
-            //else if (baseId == FLIGHT_FORM_1)
-            //    setStats(DRUID_FLIGHT_FORM);
+            else if (baseId == FLIGHT_FORM_1)
+                setStats(DRUID_FLIGHT_FORM);
 
             //Cat Form: delay prowl just a little bit
             if (baseId == CAT_FORM_1 && GetSpell(PROWL_1) && GetSpellCooldown(PROWL_1) < 300)
@@ -2594,11 +2606,8 @@ public:
             }
         }
 
-        void UnsummonAll() override
+        void UnsummonAll(bool /*savePets*/ = true) override
         {
-            //if (botPet)
-            //    botPet->ToTempSummon()->UnSummon();
-
             for (uint8 i = 0; i != MAX_TREANTS; ++i)
             {
                 if (_treants[i])
@@ -2622,7 +2631,7 @@ public:
 
         void Reset() override
         {
-            UnsummonAll();
+            UnsummonAll(false);
             for (uint8 i = 0; i != MAX_TREANTS; ++i)
                 _treants[i] = ObjectGuid::Empty;
 
@@ -2719,8 +2728,10 @@ public:
             InitSpellMap(FAERIE_FIRE_NORMAL_1);
             InitSpellMap(TRAVEL_FORM_1);
             InitSpellMap(AQUATIC_FORM_1);
+            InitSpellMap(FLIGHT_FORM_1);
             InitSpellMap(CURE_POISON_1);
             InitSpellMap(ABOLISH_POISON_1);
+            InitSpellMap(REMOVE_CURSE_1);
             InitSpellMap(ENTANGLING_ROOTS_1);
             InitSpellMap(CYCLONE_1);
             InitSpellMap(HIBERNATE_1);
@@ -2828,6 +2839,8 @@ public:
                     return true;
                 case AQUATIC_FORM_1:
                     return me->HasUnitMovementFlag(MOVEMENTFLAG_SWIMMING) && me->IsUnderWater();
+                case FLIGHT_FORM_1:
+                    return master->IsMounted() && !me->HasUnitMovementFlag(MOVEMENTFLAG_SWIMMING) && !me->IsUnderWater();
                 case TYPHOON_1:
                 case STARFALL_1:
                 case MOONKIN_FORM_1:

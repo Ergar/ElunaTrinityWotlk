@@ -3,6 +3,7 @@
 #include "botdatamgr.h"
 #include "botdump.h"
 #include "botgearscore.h"
+#include "botlog.h"
 #include "botmgr.h"
 #include "botwanderful.h"
 #include "CharacterCache.h"
@@ -429,6 +430,12 @@ public:
 
     ChatCommandTable GetCommands() const override
     {
+        static ChatCommandTable npcbotLogCommandTable =
+        {
+            //{ "testwrite",  HandleNpcBotLogTestWriteCommand,        rbac::RBAC_PERM_COMMAND_NPCBOT_DUMP_WRITE,         Console::Yes },
+            { "clear",      HandleNpcBotLogClearCommand,            rbac::RBAC_PERM_COMMAND_NPCBOT_DUMP_WRITE,         Console::Yes },
+        };
+
         static ChatCommandTable npcbotToggleCommandTable =
         {
             { "flags",      HandleNpcBotToggleFlagsCommand,         rbac::RBAC_PERM_COMMAND_NPCBOT_TOGGLE_FLAGS,       Console::No  },
@@ -509,6 +516,7 @@ public:
         static ChatCommandTable npcbotOrderCommandTable =
         {
             { "cast",       HandleNpcBotOrderCastCommand,           rbac::RBAC_PERM_COMMAND_NPCBOT_ORDER_CAST,         Console::No  },
+            { "pull",       HandleNpcBotOrderPullCommand,           rbac::RBAC_PERM_COMMAND_NPCBOT_ORDER_CAST,         Console::No  },
         };
 
         static ChatCommandTable npcbotVehicleCommandTable =
@@ -573,6 +581,7 @@ public:
             { "set",        npcbotSetCommandTable                                                                                   },
             { "add",        HandleNpcBotAddCommand,                 rbac::RBAC_PERM_COMMAND_NPCBOT_ADD,                Console::No  },
             { "remove",     HandleNpcBotRemoveCommand,              rbac::RBAC_PERM_COMMAND_NPCBOT_REMOVE,             Console::No  },
+            { "free",       HandleNpcBotFreeCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_REMOVE,             Console::No  },
             { "createnew",  HandleNpcBotCreateNewCommand,           rbac::RBAC_PERM_COMMAND_NPCBOT_CREATENEW,          Console::Yes },
             { "spawn",      HandleNpcBotSpawnCommand,               rbac::RBAC_PERM_COMMAND_NPCBOT_SPAWN,              Console::No  },
             { "move",       HandleNpcBotMoveCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_MOVE,               Console::No  },
@@ -598,6 +607,7 @@ public:
             { "vehicle",    npcbotVehicleCommandTable                                                                               },
             { "dump",       npcbotDumpCommandTable                                                                                  },
             { "wp",         npcbotWPCommandTable                                                                                    },
+            { "log",        npcbotLogCommandTable                                                                                   },
         };
 
         static ChatCommandTable commandTable =
@@ -605,6 +615,32 @@ public:
             { "npcbot",     npcbotCommandTable                                                                                      },
         };
         return commandTable;
+    }
+
+    static bool HandleNpcBotLogClearCommand(ChatHandler* handler)
+    {
+        CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+        trans->Append("TRUNCATE TABLE `characters_npcbot_logs`");
+        trans->Append("ALTER TABLE `characters_npcbot_logs` AUTO_INCREMENT = 0");
+        CharacterDatabase.CommitTransaction(trans);
+        handler->SendSysMessage("Table `characters_npcbot_logs` was cleared and autoincrement was reset");
+        return true;
+    }
+
+    static bool HandleNpcBotLogTestWriteCommand(ChatHandler* handler, Optional<std::underlying_type_t<BotLogType>> log_type, Optional<uint32> entry, Optional<std::vector<std::string>> extra)
+    {
+        if (!log_type || !entry)
+        {
+            handler->PSendSysMessage(".npcbot log testwrite #log_type #entry #[owner] #[mapid] #[inmap] #[inworld] #[params[1-%u]]", MAX_BOT_LOG_PARAMS);
+            handler->SendSysMessage("Test `characters_npcbot_logs` table write 2");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        decltype(extra)::value_type extras{ extra.value_or(decltype(extra)::value_type{}) };
+        extras.resize(MAX_BOT_LOG_PARAMS, "");
+        BotLogger::Log(*log_type, *entry, extras[0], extras[1], extras[2], extras[3], extras[4]);
+        return true;
     }
 
     static TempSummon* HandleWPSummon(WanderNode* wp, Map* map)
@@ -794,7 +830,8 @@ public:
     }
     static void HandleWPUpdateLinks(ChatHandler* handler, WanderNode* wp, std::vector<uint32> linkIds, bool oneway = false)
     {
-        auto const linksCopy = wp->GetLinks();
+        auto const& links = wp->GetLinks();
+        std::remove_reference_t<decltype(links)> linksCopy = links;
 
         std::set<decltype(linksCopy)::value_type> wps_updates;
         std::copy(std::cbegin(linksCopy), std::cend(linksCopy), std::inserter(wps_updates, wps_updates.begin()));
@@ -828,7 +865,7 @@ public:
                 continue;
             }
 
-            if (wps_relinks.count(lwp) != 0)
+            if (wps_relinks.contains(lwp))
                 wps_relinks.erase(lwp);
 
             handler->PSendSysMessage("Adding link %u%s%u...", wp->GetWPId(), oneway ? "->" : "<->", lid);
@@ -1667,6 +1704,155 @@ public:
         return true;
     }
 
+    static bool HandleNpcBotOrderPullCommand(ChatHandler* handler, Optional<std::string> bot_name, Optional<std::string_view> target_token)
+    {
+        Player* owner = handler->GetSession()->GetPlayer();
+        if (!owner->HaveBot() || !bot_name)
+        {
+            handler->SendSysMessage(".npcbot order pull #bot_name #[target_token]");
+            handler->SendSysMessage("Orders bot to pull target immediately");
+            return true;
+        }
+
+        if (owner->GetBotMgr()->IsPartyInCombat())
+        {
+            handler->SendSysMessage("Can't do that while in combat!");
+            return true;
+        }
+
+        for (std::decay_t<decltype(*bot_name)>::size_type i = 0u; i < bot_name->size(); ++i)
+            if ((*bot_name)[i] == '_')
+                (*bot_name)[i] = ' ';
+
+        Creature* bot = owner->GetBotMgr()->GetBotByName(*bot_name);
+        if (bot)
+        {
+            if (!bot->IsInWorld())
+            {
+                handler->PSendSysMessage("Bot %s is not found!", bot_name->c_str());
+                return true;
+            }
+            if (!bot->IsAlive())
+            {
+                handler->PSendSysMessage("%s is dead!", bot->GetName().c_str());
+                return true;
+            }
+            if (!bot->GetBotAI()->HasRole(BOT_ROLE_DPS) || bot->GetVictim() || bot->IsInCombat() || !bot->getAttackers().empty())
+            {
+                handler->PSendSysMessage("%s cannot pull target! Must be idle and have DPS role", bot->GetName().c_str());
+                return true;
+            }
+        }
+        else
+        {
+            auto const& class_name = *bot_name;
+            for (auto const c : class_name)
+            {
+                if (!std::islower(c))
+                {
+                    handler->SendSysMessage("Bot class name must be in lower case!");
+                    return true;
+                }
+            }
+
+            uint8 bot_class = BotMgr::BotClassByClassName(class_name);
+            if (bot_class == BOT_CLASS_NONE)
+            {
+                handler->PSendSysMessage("Unknown bot name or class %s!", class_name.c_str());
+                return true;
+            }
+
+            std::list<Creature*> cBots = owner->GetBotMgr()->GetAllBotsByClass(bot_class);
+
+            if (cBots.empty())
+            {
+                handler->PSendSysMessage("No bots of class %u found!", bot_class);
+                return true;
+            }
+
+            bot = cBots.size() == 1 ? cBots.front() : Trinity::Containers::SelectRandomContainerElement(cBots);
+
+            if (!bot)
+            {
+                handler->SendSysMessage("None of %u found bots can use pull yet!", cBots.size());
+                return true;
+            }
+        }
+
+        ObjectGuid target_guid = ObjectGuid::Empty;
+        bool token_valid = true;
+        if (!target_token || target_token == "mytarget")
+            target_guid = owner->GetTarget();
+        else if (Group const* group = owner->GetGroup())
+        {
+            if (target_token == "star")
+                target_guid = group->GetTargetIcons()[0];
+            else if (target_token == "circle")
+                target_guid = group->GetTargetIcons()[1];
+            else if (target_token == "diamond")
+                target_guid = group->GetTargetIcons()[2];
+            else if (target_token == "triangle")
+                target_guid = group->GetTargetIcons()[3];
+            else if (target_token == "moon")
+                target_guid = group->GetTargetIcons()[4];
+            else if (target_token == "square")
+                target_guid = group->GetTargetIcons()[5];
+            else if (target_token == "cross")
+                target_guid = group->GetTargetIcons()[6];
+            else if (target_token == "skull")
+                target_guid = group->GetTargetIcons()[7];
+            else if (target_token->size() == 1u && std::isdigit(target_token->front()))
+            {
+                uint8 digit = static_cast<uint8>(std::stoi(std::string(*target_token)));
+                switch (digit)
+                {
+                    case 1: case 2: case 3: case 4: case 5: case 6: case 7: case 8:
+                        target_guid = group->GetTargetIcons()[digit - 1];
+                        break;
+                    default:
+                        token_valid = false;
+                        break;
+                }
+            }
+            else
+                token_valid = false;
+        }
+        else
+            token_valid = false;
+
+        if (!token_valid)
+        {
+            handler->PSendSysMessage("Invalid target token '%s'!", *target_token);
+            handler->SendSysMessage("Valid target tokens:\n    '','mytarget', "
+                "'star','1', 'circle','2', 'diamond','3', 'triangle','4', 'moon','5', 'square','6', 'cross','7', 'skull','8'"
+                "\nNote that target icons tokens are only available while in group");
+            return true;
+        }
+
+        Unit* target = target_guid ? ObjectAccessor::GetUnit(*owner, target_guid) : nullptr;
+        if (!target || !bot->FindMap() || target->FindMap() != bot->FindMap())
+        {
+            handler->PSendSysMessage("Invalid target '%s'!", target ? target->GetName().c_str() : "unknown");
+            return true;
+        }
+
+        bot_ai::BotOrder order(BOT_ORDER_PULL);
+        order.params.pullParams.targetGuid = target_guid.GetRawValue();
+
+        if (bot->GetBotAI()->AddOrder(std::move(order)))
+        {
+            if (DEBUG_BOT_ORDERS)
+                handler->PSendSysMessage("Order given: %s: pull %s", bot->GetName().c_str(), target ? target->GetName().c_str() : "unknown");
+        }
+        else
+        {
+            if (DEBUG_BOT_ORDERS)
+                handler->PSendSysMessage("Order failed: %s: pull %s", bot->GetName().c_str(), target ? target->GetName().c_str() : "unknown");
+        }
+
+        return true;
+    }
+
     static bool HandleNpcBotOrderCastCommand(ChatHandler* handler, Optional<std::string> bot_name, Optional<std::string> spell_name, Optional<std::string_view> target_token)
     {
         Player* owner = handler->GetSession()->GetPlayer();
@@ -1788,7 +1974,8 @@ public:
             }
         }
 
-        ObjectGuid target_guid;
+        ObjectGuid target_guid = ObjectGuid::Empty;
+        bool token_valid = true;
         if (!target_token || target_token == "bot" || target_token == "self")
             target_guid = bot->GetGUID();
         else if (target_token == "me" || target_token == "master")
@@ -1801,40 +1988,49 @@ public:
             target_guid = bot->GetTarget();
         else if (target_token == "mytarget")
             target_guid = owner->GetTarget();
-        else if (target_token == "star")
-            target_guid = owner->GetGroup()->GetTargetIcons()[0];
-        else if (target_token == "circle")
-            target_guid = owner->GetGroup()->GetTargetIcons()[1];
-        else if (target_token == "diamond")
-            target_guid = owner->GetGroup()->GetTargetIcons()[2];
-        else if (target_token == "triangle")
-            target_guid = owner->GetGroup()->GetTargetIcons()[3];
-        else if (target_token == "moon")
-            target_guid = owner->GetGroup()->GetTargetIcons()[4];
-        else if (target_token == "square")
-            target_guid = owner->GetGroup()->GetTargetIcons()[5];
-        else if (target_token == "cross")
-            target_guid = owner->GetGroup()->GetTargetIcons()[6];
-        else if (target_token == "skull")
-            target_guid = owner->GetGroup()->GetTargetIcons()[7];
-        else if (target_token->size() == 1u && owner->GetGroup() && std::isdigit(target_token->front()))
+        else if (Group const* group = owner->GetGroup())
         {
-            uint8 digit = static_cast<uint8>(std::stoi(std::string(*target_token)));
-            switch (digit)
+            if (target_token == "star")
+                target_guid = group->GetTargetIcons()[0];
+            else if (target_token == "circle")
+                target_guid = group->GetTargetIcons()[1];
+            else if (target_token == "diamond")
+                target_guid = group->GetTargetIcons()[2];
+            else if (target_token == "triangle")
+                target_guid = group->GetTargetIcons()[3];
+            else if (target_token == "moon")
+                target_guid = group->GetTargetIcons()[4];
+            else if (target_token == "square")
+                target_guid = group->GetTargetIcons()[5];
+            else if (target_token == "cross")
+                target_guid = group->GetTargetIcons()[6];
+            else if (target_token == "skull")
+                target_guid = group->GetTargetIcons()[7];
+            else if (target_token->size() == 1u && std::isdigit(target_token->front()))
             {
-                case 1: case 2: case 3: case 4: case 5: case 6: case 7: case 8:
-                    target_guid = owner->GetGroup()->GetTargetIcons()[digit - 1];
-                    break;
-                default:
-                    target_guid = ObjectGuid::Empty;
-                    break;
+                uint8 digit = static_cast<uint8>(std::stoi(std::string(*target_token)));
+                switch (digit)
+                {
+                    case 1: case 2: case 3: case 4: case 5: case 6: case 7: case 8:
+                        target_guid = group->GetTargetIcons()[digit - 1];
+                        break;
+                    default:
+                        token_valid = false;
+                        break;
+                }
             }
+            else
+                token_valid = false;
         }
         else
+            token_valid = false;
+
+        if (!token_valid)
         {
             handler->PSendSysMessage("Invalid target token '%s'!", *target_token);
             handler->SendSysMessage("Valid target tokens:\n    '','bot','self', 'me','master', 'mypet', 'myvehicle', 'target', 'mytarget', "
-                "'star','1', 'circle','2', 'diamond','3', 'triangle','4', 'moon','5', 'square','6', 'cross','7', 'skull','8'");
+                "'star','1', 'circle','2', 'diamond','3', 'triangle','4', 'moon','5', 'square','6', 'cross','7', 'skull','8'"
+                "\nNote that target icons tokens are only available while in group");
             return true;
         }
 
@@ -2765,6 +2961,86 @@ public:
         return true;
     }
 
+    static bool HandeNpcBotCleanUpAndRemoval(ChatHandler* handler, Creature* bot, Player const* chr/* = nullptr*/)
+    {
+        Player const* botowner = bot->GetBotOwner()->ToPlayer();
+
+        if (bot->GetBotAI()->HasRealEquipment())
+        {
+            ObjectGuid receiver =
+                botowner ? botowner->GetGUID() :
+                bot->GetBotAI()->GetBotOwnerGuid() != 0 ? ObjectGuid(HighGuid::Player, 0, bot->GetBotAI()->GetBotOwnerGuid()) :
+                chr ? chr->GetGUID() : ObjectGuid::Empty;
+
+            if (!botowner && chr && receiver != chr->GetGUID() && !sCharacterCache->HasCharacterCacheEntry(receiver))
+                receiver = chr->GetGUID();
+
+            if (receiver == ObjectGuid::Empty)
+            {
+                handler->PSendSysMessage("Cannot delete bot %s from console: has gear but no player to give it back to! Can only delete this bot in-game.", bot->GetName().c_str());
+                return false;
+            }
+            if (!bot->GetBotAI()->UnEquipAll(receiver))
+            {
+                handler->PSendSysMessage("%s is unable to unequip some gear. Please remove equips manually first!", bot->GetName().c_str());
+                return false;
+            }
+        }
+
+        if (botowner)
+            botowner->GetBotMgr()->RemoveBot(bot->GetGUID(), BOT_REMOVE_DISMISS);
+
+        return true;
+    }
+
+    static bool HandleNpcBotFreeCommand(ChatHandler* handler)
+    {
+        Player* chr = handler->GetSession()->GetPlayer();
+        Unit* ubot = chr->GetSelectedUnit();
+        if (!ubot)
+        {
+            handler->SendSysMessage(".npcbot free");
+            handler->SendSysMessage("Immediately cancels selected npcbot's ownership");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        Creature* bot = ubot->ToCreature();
+        if (!bot || !bot->IsNPCBot() || !bot->GetBotAI()->GetBotOwnerGuid() || bot->IsTempBot())
+        {
+            handler->SendSysMessage("No owned npcbot selected");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint32 owner_guid = bot->GetBotAI()->GetBotOwnerGuid();
+        Player const* botowner = bot->GetBotOwner()->ToPlayer();
+        if (!HandeNpcBotCleanUpAndRemoval(handler, bot, chr))
+        {
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint8 spec = bot_ai::SelectSpecForClass(bot->GetBotClass());
+        BotDataMgr::UpdateNpcBotData(bot->GetEntry(), NPCBOT_UPDATE_SPEC, &spec);
+        uint32 roleMask = bot_ai::DefaultRolesForClass(bot->GetBotClass(), spec);
+        BotDataMgr::UpdateNpcBotData(bot->GetEntry(), NPCBOT_UPDATE_ROLES, &roleMask);
+
+        if (!botowner)
+        {
+            uint32 newOwner = 0;
+            BotDataMgr::UpdateNpcBotData(bot->GetEntry(), NPCBOT_UPDATE_OWNER, &newOwner);
+
+            if (Group* gr = bot->GetBotGroup())
+                gr->RemoveMember(bot->GetGUID());
+
+            bot->GetBotAI()->ResetBotAI(BOTAI_RESET_DISMISS);
+        }
+
+        handler->PSendSysMessage("Npcbot %s successfully freed, owner was %u", bot->GetName().c_str(), owner_guid);
+        return true;
+    }
+
     static bool HandleNpcBotDeleteCommand(ChatHandler* handler)
     {
         Player* chr = handler->GetSession()->GetPlayer();
@@ -2792,21 +3068,11 @@ public:
             return true;
         }
 
-        Player const* botowner = bot->GetBotOwner()->ToPlayer();
-
-        ObjectGuid receiver =
-            botowner ? botowner->GetGUID() :
-            bot->GetBotAI()->GetBotOwnerGuid() != 0 ? ObjectGuid(HighGuid::Player, 0, bot->GetBotAI()->GetBotOwnerGuid()) :
-            chr->GetGUID();
-        if (!bot->GetBotAI()->UnEquipAll(receiver))
+        if (!HandeNpcBotCleanUpAndRemoval(handler, bot, chr))
         {
-            handler->PSendSysMessage("%s is unable to unequip some gear. Please remove equips before deleting bot!", bot->GetName().c_str());
             handler->SetSentErrorMessage(true);
             return false;
         }
-
-        if (botowner)
-            botowner->GetBotMgr()->RemoveBot(bot->GetGUID(), BOT_REMOVE_DISMISS);
 
         bot->CombatStop();
         bot->GetBotAI()->Reset();
@@ -2844,36 +3110,18 @@ public:
 
         if (bot->GetBotAI()->IsWanderer())
         {
-            handler->SendSysMessage("Cannot delete wanderer npcbot");
-            handler->SetSentErrorMessage(true);
-            return false;
+            BotDataMgr::DespawnWandererBot(bot->GetEntry());
+            handler->PSendSysMessage("Wandering bot %u '%s' successfully deleted", bot->GetEntry(), bot->GetName().c_str());
+            return true;
         }
 
         Player* chr = !handler->IsConsole() ? handler->GetSession()->GetPlayer() : nullptr;
-        Player const* botowner = bot->GetBotOwner()->ToPlayer();
 
-        if (bot->GetBotAI()->HasRealEquipment())
+        if (!HandeNpcBotCleanUpAndRemoval(handler, const_cast<Creature*>(bot), chr))
         {
-            ObjectGuid receiver =
-                botowner ? botowner->GetGUID() :
-                bot->GetBotAI()->GetBotOwnerGuid() != 0 ? ObjectGuid(HighGuid::Player, 0, bot->GetBotAI()->GetBotOwnerGuid()) :
-                chr ? chr->GetGUID() : ObjectGuid::Empty;
-            if (receiver == ObjectGuid::Empty)
-            {
-                handler->PSendSysMessage("Cannot delete bot %s from console: has gear but no player to give it back to! Can only delete this bot in-game.", bot->GetName().c_str());
-                handler->SetSentErrorMessage(true);
-                return false;
-            }
-            if (!bot->GetBotAI()->UnEquipAll(receiver))
-            {
-                handler->PSendSysMessage("%s is unable to unequip some gear. Please remove equips before deleting bot!", bot->GetName().c_str());
-                handler->SetSentErrorMessage(true);
-                return false;
-            }
+            handler->SetSentErrorMessage(true);
+            return false;
         }
-
-        if (botowner)
-            botowner->GetBotMgr()->RemoveBot(bot->GetGUID(), BOT_REMOVE_DISMISS);
 
         const_cast<Creature*>(bot)->CombatStop();
         bot->GetBotAI()->Reset();

@@ -46,6 +46,11 @@
 #include "botmgr.h"
 //end npcbot
 
+//npcbot
+#include "botdatamgr.h"
+#include "botmgr.h"
+//end npcbot
+
 MapManager::MapManager()
     : _nextInstanceId(0), _scheduledScripts(0)
 {
