@@ -9459,6 +9459,17 @@ void Player::SendInitWorldStates(uint32 zoneId, uint32 areaId)
             {
             }
             break;
+        case 4988: // Stormwind Prison
+        {
+            if (instance)
+                instance->FillInitialWorldStates(packet);
+            else
+            {
+                packet.Worldstates.emplace_back(50000, 0); // WORLDSTATE_SHOW_MONSTER_KILLED
+                packet.Worldstates.emplace_back(50001, 0); // WORLDSTATE_MONSTER_KILLED
+                packet.Worldstates.emplace_back(50002, 0); // WORLDSTATE_MONSTER_SPAWNED
+            }
+        }
         default:
             break;
     }

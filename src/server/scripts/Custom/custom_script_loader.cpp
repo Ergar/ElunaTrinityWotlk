@@ -22,8 +22,20 @@
 
 void AddSC_AutoBalance();
 
+void AddSC_boss_hogger_slayer();
+void AddSC_boss_jan_langenbudde();
+void AddSC_boss_bastian_mudde();
+void AddSC_stormwind_prison();
+void AddSC_instance_stormwind_prison();
+
 void AddCustomScripts()
 {
     // VAS AutoBalance
     AddSC_AutoBalance();
+
+    AddSC_boss_hogger_slayer();
+    AddSC_boss_jan_langenbudde();
+    AddSC_boss_bastian_mudde();
+    AddSC_stormwind_prison();
+    AddSC_instance_stormwind_prison();
 }
