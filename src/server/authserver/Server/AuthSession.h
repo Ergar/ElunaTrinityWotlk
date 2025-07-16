@@ -30,8 +30,9 @@
 
 using boost::asio::ip::tcp;
 
+class AuthHandlerTable;
 class ByteBuffer;
-struct AuthHandler;
+enum eAuthCmd : uint8;
 
 enum AuthStatus
 {
@@ -40,6 +41,7 @@ enum AuthStatus
     STATUS_RECONNECT_PROOF,
     STATUS_AUTHED,
     STATUS_WAITING_FOR_REALM_LIST,
+    STATUS_XFER,
     STATUS_CLOSED
 };
 
@@ -63,8 +65,6 @@ class AuthSession : public Socket<AuthSession>
     typedef Socket<AuthSession> AuthSocket;
 
 public:
-    static std::unordered_map<uint8, AuthHandler> InitHandlers();
-
     AuthSession(tcp::socket&& socket);
 
     void Start() override;
@@ -76,11 +76,15 @@ protected:
     void ReadHandler() override;
 
 private:
+    friend AuthHandlerTable;
     bool HandleLogonChallenge();
     bool HandleLogonProof();
     bool HandleReconnectChallenge();
     bool HandleReconnectProof();
     bool HandleRealmList();
+    bool HandleXferAccept();
+    bool HandleXferResume();
+    bool HandleXferCancel();
 
     void CheckIpCallback(PreparedQueryResult result);
     void LogonChallengeCallback(PreparedQueryResult result);
@@ -105,16 +109,5 @@ private:
 
     QueryCallbackProcessor _queryProcessor;
 };
-
-#pragma pack(push, 1)
-
-struct AuthHandler
-{
-    AuthStatus status;
-    size_t packetSize;
-    bool (AuthSession::*handler)();
-};
-
-#pragma pack(pop)
 
 #endif

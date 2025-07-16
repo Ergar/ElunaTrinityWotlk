@@ -21,7 +21,6 @@
 #include "CellImpl.h"
 #include "CinematicMgr.h"
 #include "Common.h"
-#include "Config.h"
 #include "Creature.h"
 #include "GameTime.h"
 #include "GridNotifiersImpl.h"
@@ -243,19 +242,6 @@ void Object::DestroyForPlayer(Player* target, bool onDeath) const
 {
     ASSERT(target);
 
-    if (IsUnit())
-    {
-        if (Battleground* bg = target->GetBattleground())
-        {
-            if (bg->isArena())
-            {
-                WorldPacket data(SMSG_ARENA_UNIT_DESTROYED, 8);
-                data << uint64(GetGUID());
-                target->SendDirectMessage(&data);
-            }
-        }
-    }
-
     WorldPacket data(SMSG_DESTROY_OBJECT, 8 + 1);
     data << uint64(GetGUID());
     //! If the following bool is true, the client will call "void CGUnit_C::OnDeath()" for this object.
@@ -370,10 +356,10 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint16 flags) const
 
             *data << object->GetOrientation();
 
-            if (GetTypeId() == TYPEID_CORPSE)
-                *data << float(object->GetOrientation());
+            if (transport)
+                *data << float(object->GetTransOffsetO());
             else
-                *data << float(0);
+                *data << float(object->GetOrientation());
         }
         else
         {
@@ -958,9 +944,6 @@ void MovementInfo::OutDebug()
 }
 
 WorldObject::WorldObject(bool isWorldObject) : Object(), WorldLocation(), LastUsedScriptID(0),
-#ifdef ELUNA
-elunaEvents(NULL),
-#endif
 m_movementInfo(), m_name(), m_isActive(false), m_isFarVisible(false), m_isStoredInWorldObjectGridContainer(isWorldObject), m_zoneScript(nullptr),
 m_transport(nullptr), m_zoneId(0), m_areaId(0), m_staticFloorZ(VMAP_INVALID_HEIGHT), m_outdoors(false), m_liquidStatus(LIQUID_MAP_NO_WATER),
 m_currMap(nullptr), m_InstanceId(0), m_phaseMask(PHASEMASK_NORMAL), m_notifyflags(0)
@@ -971,10 +954,6 @@ m_currMap(nullptr), m_InstanceId(0), m_phaseMask(PHASEMASK_NORMAL), m_notifyflag
 
 WorldObject::~WorldObject()
 {
-#ifdef ELUNA
-    delete elunaEvents;
-    elunaEvents = NULL;
-#endif
     // this may happen because there are many !create/delete
     if (IsStoredInWorldObjectGridContainer() && m_currMap)
     {
@@ -1874,19 +1853,21 @@ void WorldObject::SetMap(Map* map)
     m_mapId = map->GetId();
     m_InstanceId = map->GetInstanceId();
 #ifdef ELUNA
-    //@todo: possibly look into cleanly clearing all pending events from previous map's event mgr.
-
-    // if multistate, delete elunaEvents and set to nullptr. events shouldn't move across states.
-    // in single state, the timed events should move across maps
-    if (!sElunaConfig->IsElunaCompatibilityMode())
-    {
-        delete elunaEvents;
-        elunaEvents = nullptr; // set to null in case map doesn't use eluna
-    }
+    // always reset Map events, then recreate the Map events procesor if Eluna is enabled for the map
+    auto& events = GetElunaEvents(m_mapId);
+    if (events)
+        events.reset();
 
     if (Eluna* e = map->GetEluna())
-        if (!elunaEvents)
-            elunaEvents = new ElunaEventProcessor(e, this);
+        events = std::make_unique<ElunaEventProcessor>(e, this);
+
+    // create the World events processor
+    if (Eluna* e = sWorld->GetEluna())
+    {
+        auto& events = GetElunaEvents(-1);
+        if (!events)
+            events = std::make_unique<ElunaEventProcessor>(e, this);
+    }
 #endif
     if (IsStoredInWorldObjectGridContainer())
         m_currMap->AddWorldObject(this);

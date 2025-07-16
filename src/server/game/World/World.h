@@ -327,6 +327,7 @@ enum WorldIntConfigs : uint32
     CONFIG_ARENA_START_PERSONAL_RATING,
     CONFIG_ARENA_START_MATCHMAKER_RATING,
     CONFIG_MAX_WHO,
+    CONFIG_WHO_LIST_UPDATE_INTERVAL,
     CONFIG_HONOR_AFTER_DUEL,
     CONFIG_PVP_TOKEN_MAP_TYPE,
     CONFIG_PVP_TOKEN_ID,
@@ -774,8 +775,8 @@ class TC_GAME_API World
         bool IsGuidAlert() { return _guidAlert; }
 
 #ifdef ELUNA
-        Eluna* GetEluna() const { return eluna; }
-        Eluna* eluna;
+        Eluna* GetEluna() const { return eluna.get(); }
+        std::unique_ptr<Eluna> eluna;
 #endif
     protected:
         void _UpdateGameTime();
@@ -850,7 +851,7 @@ class TC_GAME_API World
         // CLI command holder to be thread safe
         LockedQueue<CliCommandHolder*> cliCmdQueue;
 
-        // next daily quests and random bg reset time
+        // scheduled reset times
         time_t m_NextDailyQuestReset;
         time_t m_NextWeeklyQuestReset;
         time_t m_NextMonthlyQuestReset;

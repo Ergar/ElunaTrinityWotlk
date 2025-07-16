@@ -18,7 +18,6 @@
 #include "Map.h"
 #include "Battleground.h"
 #include "CellImpl.h"
-#include "Config.h"
 #include "Chat.h"
 #include "DatabaseEnv.h"
 #include "DisableMgr.h"
@@ -98,11 +97,6 @@ struct RespawnInfoWithHandle : RespawnInfo
 
 Map::~Map()
 {
-#ifdef ELUNA
-    delete eluna;
-    eluna = nullptr;
-#endif
-
     // Delete all waiting spawns, else there will be a memory leak
     // This doesn't delete from database.
     UnloadAllRespawnInfos();
@@ -299,9 +293,9 @@ i_scriptLock(false), _respawnTimes(std::make_unique<RespawnListContainer>()), _r
     // lua state begins uninitialized
     eluna = nullptr;
 
-    if (sElunaConfig->IsElunaEnabled() && !sElunaConfig->IsElunaCompatibilityMode() && sElunaConfig->ShouldMapLoadEluna(id))
+    if (sElunaConfig->IsElunaEnabled() && sElunaConfig->ShouldMapLoadEluna(id))
         if (!IsParentMap() || (IsParentMap() && !Instanceable()))
-            eluna = new Eluna(this);
+            eluna = std::make_unique<Eluna>(this);
 #endif
     for (unsigned int idx=0; idx < MAX_NUMBER_OF_GRIDS; ++idx)
     {
@@ -3173,7 +3167,7 @@ bool Map::AddRespawnInfo(RespawnInfo const& info)
         if (it != bySpawnIdMap.end()) // spawnid already has a respawn scheduled
         {
             RespawnInfo* const existing = it->second;
-            if (info.respawnTime <= existing->respawnTime) // delete existing in this case
+            if (info.respawnTime < existing->respawnTime) // delete existing in this case
                 DeleteRespawnInfo(existing);
             else
                 return false;
@@ -4307,6 +4301,11 @@ bool Map::Instanceable() const
     return i_mapEntry && i_mapEntry->Instanceable();
 }
 
+bool Map::IsWorldMap() const
+{
+    return i_mapEntry && i_mapEntry->IsWorldMap();
+}
+
 bool Map::IsDungeon() const
 {
     return i_mapEntry && i_mapEntry->IsDungeon();
@@ -4934,15 +4933,5 @@ std::string InstanceMap::GetDebugInfo() const
         << "ScriptId: " << GetScriptId() << " ScriptName: " << GetScriptName();
     return sstr.str();
 }
-
-#ifdef ELUNA
-Eluna *Map::GetEluna() const
-{
-    if(sElunaConfig->IsElunaCompatibilityMode())
-        return sWorld->GetEluna();
-
-    return eluna;
-}
-#endif
 
 template class TC_GAME_API TypeUnorderedMapContainer<AllMapStoredObjectTypes, ObjectGuid>;

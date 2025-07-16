@@ -223,11 +223,6 @@ public:
 
 #pragma pack(push, 1)
 
-enum LevelRequirementVsMode
-{
-    LEVELREQUIREMENT_HEROIC = 70
-};
-
 struct ZoneDynamicInfo
 {
     ZoneDynamicInfo();
@@ -426,6 +421,7 @@ class TC_GAME_API Map : public GridRefManager<NGridType>
         MapDifficulty const* GetMapDifficulty() const;
 
         bool Instanceable() const;
+        bool IsWorldMap() const;
         bool IsDungeon() const;
         bool IsNonRaidDungeon() const;
         bool IsRaid() const;
@@ -795,7 +791,7 @@ class TC_GAME_API Map : public GridRefManager<NGridType>
         void AddFarSpellCallback(FarSpellCallback&& callback);
         bool IsParentMap() const { return GetParent() == this; }
 #ifdef ELUNA
-        Eluna* GetEluna() const;
+        Eluna* GetEluna() const { return eluna.get(); }
 
         LuaVal lua_data = LuaVal({});
 #endif
@@ -879,7 +875,7 @@ class TC_GAME_API Map : public GridRefManager<NGridType>
 
         MPSCQueue<FarSpellCallback> _farSpellCallbacks;
 #ifdef ELUNA
-        Eluna* eluna;
+        std::unique_ptr<Eluna> eluna;
 #endif
 };
 

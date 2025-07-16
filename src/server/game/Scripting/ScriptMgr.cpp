@@ -819,8 +819,8 @@ public:
         }
         else
         {
-            // The script uses a script name from database, but isn't assigned to anything.
-            TC_LOG_ERROR("sql.sql", "Script '{}' exists in the core, but the database does not assign it to any creature.",
+            // The script exist in the core, but isn't assigned to anything in the database.
+            TC_LOG_ERROR("sql.sql", "Script '{}' exists in the core, but is not referenced by the database!",
                 script->GetName());
 
             // Avoid calling "delete script;" because we are currently in the script constructor
@@ -1448,7 +1448,15 @@ void ScriptMgr::OnCreateMap(Map* map)
 
 #ifdef ELUNA
     if (Eluna* e = map->GetEluna())
+    {
         e->OnCreate(map);
+        if (map->IsBattlegroundOrArena())
+        {
+            BattleGround* bg = ((BattlegroundMap*)map)->GetBG();
+            if(bg)
+                e->OnBGCreate(bg, bg->GetTypeID(), bg->GetInstanceID());
+        }
+    }
 #endif
 
     SCR_MAP_BGN(WorldMapScript, map, itr, end, entry, IsWorldMap);
@@ -1581,10 +1589,8 @@ void ScriptMgr::OnMapUpdate(Map* map, uint32 diff)
 #ifdef ELUNA
     if (Eluna* e = map->GetEluna())
     {
-        if(!sElunaConfig->IsElunaCompatibilityMode())
-            e->UpdateEluna(diff);
-
-        e->OnUpdate(map, diff);
+        e->UpdateEluna(diff);
+        e->OnMapUpdate(map, diff);
     }
 #endif
 

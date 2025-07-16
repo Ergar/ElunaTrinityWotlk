@@ -155,12 +155,6 @@ World::World()
 /// World destructor
 World::~World()
 {
-#ifdef ELUNA
-    // Delete world Eluna state
-    delete eluna;
-    eluna = nullptr;
-#endif
-
     ///- Empty the kicked session set
     while (!m_sessions.empty())
     {
@@ -1437,6 +1431,18 @@ void World::LoadConfigSettings(bool reload)
     TC_LOG_INFO("server.loading", "VMap data directory is: {}vmaps", m_dataPath);
 
     m_int_configs[CONFIG_MAX_WHO] = sConfigMgr->GetIntDefault("MaxWhoListReturns", 49);
+    m_int_configs[CONFIG_WHO_LIST_UPDATE_INTERVAL] = sConfigMgr->GetIntDefault("WhoList.Update.Interval", 5);
+    if (int32(m_int_configs[CONFIG_WHO_LIST_UPDATE_INTERVAL]) <= 0)
+    {
+        TC_LOG_ERROR("server.loading", "WhoList.Update.Interval ({}) must be > 0, set to default 5 seconds.", m_int_configs[CONFIG_WHO_LIST_UPDATE_INTERVAL]);
+        m_int_configs[CONFIG_WHO_LIST_UPDATE_INTERVAL] = 5;
+    }
+    if (reload)
+    {
+        m_timers[WUPDATE_WHO_LIST].SetInterval(m_int_configs[CONFIG_WHO_LIST_UPDATE_INTERVAL] * IN_MILLISECONDS);
+        m_timers[WUPDATE_WHO_LIST].Reset();
+    }
+
     m_bool_configs[CONFIG_START_ALL_SPELLS] = sConfigMgr->GetBoolDefault("PlayerStart.AllSpells", false);
     m_int_configs[CONFIG_HONOR_AFTER_DUEL] = sConfigMgr->GetIntDefault("HonorPointsAfterDuel", 0);
     m_bool_configs[CONFIG_RESET_DUEL_COOLDOWNS] = sConfigMgr->GetBoolDefault("ResetDuelCooldowns", false);
@@ -2125,7 +2131,7 @@ void World::SetInitialWorldSettings()
     if (sElunaConfig->IsElunaEnabled())
     {
         TC_LOG_INFO("server.loading", "Starting Eluna world state...");
-        eluna = new Eluna(nullptr, sElunaConfig->IsElunaCompatibilityMode());
+        eluna = std::make_unique<Eluna>(nullptr);
     }
 #endif
 
@@ -2182,7 +2188,7 @@ void World::SetInitialWorldSettings()
 
     m_timers[WUPDATE_CHECK_FILECHANGES].SetInterval(500);
 
-    m_timers[WUPDATE_WHO_LIST].SetInterval(5 * IN_MILLISECONDS); // update who list cache every 5 seconds
+    m_timers[WUPDATE_WHO_LIST].SetInterval(getIntConfig(CONFIG_WHO_LIST_UPDATE_INTERVAL) * IN_MILLISECONDS); // update who list cache every 5 seconds
 
     m_timers[WUPDATE_CHANNEL_SAVE].SetInterval(getIntConfig(CONFIG_PRESERVE_CUSTOM_CHANNEL_INTERVAL) * MINUTE * IN_MILLISECONDS);
 
@@ -2603,7 +2609,7 @@ void World::Update(uint32 diff)
     {
         TC_METRIC_TIMER("world_update_time", TC_METRIC_TAG("type", "Ping MySQL"));
         m_timers[WUPDATE_PINGDB].Reset();
-        TC_LOG_DEBUG("misc", "Ping MySQL to keep connection alive");
+        TC_LOG_DEBUG("sql.driver", "Ping MySQL to keep connection alive");
         CharacterDatabase.KeepAlive();
         LoginDatabase.KeepAlive();
         WorldDatabase.KeepAlive();

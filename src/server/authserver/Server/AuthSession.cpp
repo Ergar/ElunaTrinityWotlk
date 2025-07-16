@@ -35,7 +35,7 @@
 
 using boost::asio::ip::tcp;
 
-enum eAuthCmd
+enum eAuthCmd : uint8
 {
     AUTH_LOGON_CHALLENGE = 0x00,
     AUTH_LOGON_PROOF = 0x01,
@@ -120,20 +120,56 @@ std::array<uint8, 16> VersionChallenge = { { 0xBA, 0xA3, 0x1E, 0x99, 0xA0, 0x0B,
 #define AUTH_LOGON_CHALLENGE_INITIAL_SIZE 4
 #define REALM_LIST_PACKET_SIZE 5
 
-std::unordered_map<uint8, AuthHandler> AuthSession::InitHandlers()
+struct AuthHandler
 {
-    std::unordered_map<uint8, AuthHandler> handlers;
+    eAuthCmd cmd = { };
+    AuthStatus status = STATUS_CLOSED;
+    size_t packetSize = 0;
+    bool (*handler)(AuthSession*) = nullptr;
+};
 
-    handlers[AUTH_LOGON_CHALLENGE]     = { STATUS_CHALLENGE, AUTH_LOGON_CHALLENGE_INITIAL_SIZE, &AuthSession::HandleLogonChallenge };
-    handlers[AUTH_LOGON_PROOF]         = { STATUS_LOGON_PROOF, sizeof(AUTH_LOGON_PROOF_C),        &AuthSession::HandleLogonProof };
-    handlers[AUTH_RECONNECT_CHALLENGE] = { STATUS_CHALLENGE, AUTH_LOGON_CHALLENGE_INITIAL_SIZE, &AuthSession::HandleReconnectChallenge };
-    handlers[AUTH_RECONNECT_PROOF]     = { STATUS_RECONNECT_PROOF, sizeof(AUTH_RECONNECT_PROOF_C),    &AuthSession::HandleReconnectProof };
-    handlers[REALM_LIST]               = { STATUS_AUTHED,    REALM_LIST_PACKET_SIZE,            &AuthSession::HandleRealmList };
+class AuthHandlerTable
+{
+public:
+    consteval AuthHandlerTable()
+    {
+        InitializeHandler(AUTH_LOGON_CHALLENGE, STATUS_CHALLENGE, AUTH_LOGON_CHALLENGE_INITIAL_SIZE, [](AuthSession* session) { return session->HandleLogonChallenge(); });
+        InitializeHandler(AUTH_LOGON_PROOF, STATUS_LOGON_PROOF, sizeof(AUTH_LOGON_PROOF_C), [](AuthSession* session) { return session->HandleLogonProof(); });
+        InitializeHandler(AUTH_RECONNECT_CHALLENGE, STATUS_CHALLENGE, AUTH_LOGON_CHALLENGE_INITIAL_SIZE, [](AuthSession* session) { return session->HandleReconnectChallenge(); });
+        InitializeHandler(AUTH_RECONNECT_PROOF, STATUS_RECONNECT_PROOF, sizeof(AUTH_RECONNECT_PROOF_C), [](AuthSession* session) { return session->HandleReconnectProof(); });
+        InitializeHandler(REALM_LIST, STATUS_AUTHED, REALM_LIST_PACKET_SIZE, [](AuthSession* session) { return session->HandleRealmList(); });
+        InitializeHandler(XFER_ACCEPT, STATUS_XFER, 1, [](AuthSession* session) { return session->HandleXferAccept(); });
+        InitializeHandler(XFER_RESUME, STATUS_XFER, 9, [](AuthSession* session) { return session->HandleXferResume(); });
+        InitializeHandler(XFER_CANCEL, STATUS_XFER, 1, [](AuthSession* session) { return session->HandleXferCancel(); });
+    }
 
-    return handlers;
-}
+    constexpr AuthHandler const* operator[](eAuthCmd cmd) const
+    {
+        std::size_t index = GetOpcodeArrayIndex(cmd);
+        if (index >= _handlers.size())
+            return nullptr;
 
-std::unordered_map<uint8, AuthHandler> const Handlers = AuthSession::InitHandlers();
+        AuthHandler const& handler = _handlers[index];
+        if (handler.cmd != cmd)
+            return nullptr;
+
+        return &handler;
+    }
+
+private:
+    // perfect hash function for all valid values of eAuthCmd
+    inline static constexpr std::size_t GetOpcodeArrayIndex(eAuthCmd c)
+    {
+        return (c & 0x7) + ((c & 0x10) >> 2) + ((c & 0x20) >> 5);
+    }
+
+    constexpr void InitializeHandler(eAuthCmd cmd, AuthStatus status, std::size_t packetSize, bool (*handler)(AuthSession*))
+    {
+        _handlers[GetOpcodeArrayIndex(cmd)] = { .cmd = cmd, .status = status, .packetSize = packetSize, .handler = handler, };
+    }
+
+    std::array<AuthHandler, 10> _handlers;
+} inline constexpr Handlers;
 
 void AccountInfo::LoadResult(Field* fields)
 {
@@ -216,22 +252,15 @@ void AuthSession::ReadHandler()
     MessageBuffer& packet = GetReadBuffer();
     while (packet.GetActiveSize())
     {
-        uint8 cmd = packet.GetReadPointer()[0];
-        auto itr = Handlers.find(cmd);
-        if (itr == Handlers.end())
-        {
-            // well we dont handle this, lets just ignore it
-            packet.Reset();
-            break;
-        }
-
-        if (_status != itr->second.status)
+        eAuthCmd cmd = eAuthCmd(packet.GetReadPointer()[0]);
+        AuthHandler const* itr = Handlers[cmd];
+        if (!itr || _status != itr->status)
         {
             CloseSocket();
             return;
         }
 
-        uint16 size = uint16(itr->second.packetSize);
+        std::size_t size = itr->packetSize;
         if (packet.GetActiveSize() < size)
             break;
 
@@ -249,7 +278,7 @@ void AuthSession::ReadHandler()
         if (packet.GetActiveSize() < size)
             break;
 
-        if (!(*this.*itr->second.handler)())
+        if (!itr->handler(this))
         {
             CloseSocket();
             return;
@@ -517,39 +546,39 @@ bool AuthSession::HandleLogonProof()
         stmt->setString(3, _os);
         stmt->setInt16(4, _timezoneOffset.count());
         stmt->setString(5, _accountInfo.Login);
-        LoginDatabase.DirectExecute(stmt);
-
-        // Finish SRP6 and send the final result to the client
-        Trinity::Crypto::SHA1::Digest M2 = Trinity::Crypto::SRP6::GetSessionVerifier(logonProof->A, logonProof->clientM, _sessionKey);
-
-        ByteBuffer packet;
-        if (_expversion & POST_BC_EXP_FLAG)                 // 2.x and 3.x clients
+        _queryProcessor.AddCallback(LoginDatabase.AsyncQuery(stmt)
+            .WithPreparedCallback([this, M2 = Trinity::Crypto::SRP6::GetSessionVerifier(logonProof->A, logonProof->clientM, _sessionKey)](PreparedQueryResult const&)
         {
-            sAuthLogonProof_S proof;
-            proof.M2 = M2;
-            proof.cmd = AUTH_LOGON_PROOF;
-            proof.error = 0;
-            proof.AccountFlags = 0x00800000;    // 0x01 = GM, 0x08 = Trial, 0x00800000 = Pro pass (arena tournament)
-            proof.SurveyId = 0;
-            proof.LoginFlags = 0;               // 0x1 = has account message
+            // Finish SRP6 and send the final result to the client
+            ByteBuffer packet;
+            if (_expversion & POST_BC_EXP_FLAG)                 // 2.x and 3.x clients
+            {
+                sAuthLogonProof_S proof;
+                proof.M2 = M2;
+                proof.cmd = AUTH_LOGON_PROOF;
+                proof.error = 0;
+                proof.AccountFlags = 0x00800000;    // 0x01 = GM, 0x08 = Trial, 0x00800000 = Pro pass (arena tournament)
+                proof.SurveyId = 0;
+                proof.LoginFlags = 0;               // 0x1 = has account message
 
-            packet.resize(sizeof(proof));
-            std::memcpy(packet.contents(), &proof, sizeof(proof));
-        }
-        else
-        {
-            sAuthLogonProof_S_Old proof;
-            proof.M2 = M2;
-            proof.cmd = AUTH_LOGON_PROOF;
-            proof.error = 0;
-            proof.unk2 = 0x00;
+                packet.resize(sizeof(proof));
+                std::memcpy(packet.contents(), &proof, sizeof(proof));
+            }
+            else
+            {
+                sAuthLogonProof_S_Old proof;
+                proof.M2 = M2;
+                proof.cmd = AUTH_LOGON_PROOF;
+                proof.error = 0;
+                proof.unk2 = 0x00;
 
-            packet.resize(sizeof(proof));
-            std::memcpy(packet.contents(), &proof, sizeof(proof));
-        }
+                packet.resize(sizeof(proof));
+                std::memcpy(packet.contents(), &proof, sizeof(proof));
+            }
 
-        SendPacket(packet);
-        _status = STATUS_AUTHED;
+            SendPacket(packet);
+            _status = STATUS_AUTHED;
+        }));
     }
     else
     {
@@ -831,6 +860,30 @@ void AuthSession::RealmListCallback(PreparedQueryResult result)
     SendPacket(hdr);
 
     _status = STATUS_AUTHED;
+}
+
+bool AuthSession::HandleXferAccept()
+{
+    TC_LOG_DEBUG("server.authserver", "Entering _HandleXferAccept");
+
+    // empty handler meant to close the connection if received
+    return false;
+}
+
+bool AuthSession::HandleXferResume()
+{
+    TC_LOG_DEBUG("server.authserver", "Entering _HandleXferResume");
+
+    // empty handler meant to close the connection if received
+    return false;
+}
+
+bool AuthSession::HandleXferCancel()
+{
+    TC_LOG_DEBUG("server.authserver", "Entering _HandleXferCancel");
+
+    // empty handler meant to close the connection if received
+    return false;
 }
 
 bool AuthSession::VerifyVersion(uint8 const* a, int32 aLength, Trinity::Crypto::SHA1::Digest const& versionProof, bool isReconnect)
