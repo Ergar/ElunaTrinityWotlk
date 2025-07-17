@@ -299,9 +299,9 @@ void WorldSession::HandleBattlegroundPlayerPositionsOpcode(WorldPackets::Battleg
     //end npcbot
 
     if (ObjectGuid guid = bg->GetFlagPickerGUID(TEAM_ALLIANCE))
-    //npcbot
+        //npcbot
     {
-    //end npcbot
+        //end npcbot
         if (Player* allianceFlagCarrier = ObjectAccessor::GetPlayer(*_player, guid))
             playerPositions.FlagCarriers.emplace_back(guid, allianceFlagCarrier->GetPosition());
         //npcbot
@@ -312,12 +312,12 @@ void WorldSession::HandleBattlegroundPlayerPositionsOpcode(WorldPackets::Battleg
                 playerPositions.FlagCarriers.emplace_back(guid, afcbot->GetPosition());
         }
     }
-        //end npcbot
+    //end npcbot
 
     if (ObjectGuid guid = bg->GetFlagPickerGUID(TEAM_HORDE))
-    //npcbot
+        //npcbot
     {
-    //end npcbot
+        //end npcbot
         if (Player* hordeFlagCarrier = ObjectAccessor::GetPlayer(*_player, guid))
             playerPositions.FlagCarriers.emplace_back(guid, hordeFlagCarrier->GetPosition());
         //npcbot
@@ -328,31 +328,9 @@ void WorldSession::HandleBattlegroundPlayerPositionsOpcode(WorldPackets::Battleg
                 playerPositions.FlagCarriers.emplace_back(guid, hfcbot->GetPosition());
         }
     }
-        //end npcbot
+    //end npcbot
 
-    WorldPacket data(MSG_BATTLEGROUND_PLAYER_POSITIONS, 4 + 4 + 16 * flagCarrierCount);
-    // Used to send several player positions (found used in AV)
-    data << 0;  // CGBattlefieldInfo__m_numPlayerPositions
-    /*
-    for (CGBattlefieldInfo__m_numPlayerPositions)
-        data << guid << posx << posy;
-    */
-    data << flagCarrierCount;
-    if (allianceFlagCarrier)
-    {
-        data << uint64(allianceFlagCarrier->GetGUID());
-        data << float(allianceFlagCarrier->GetPositionX());
-        data << float(allianceFlagCarrier->GetPositionY());
-    }
-
-    if (hordeFlagCarrier)
-    {
-        data << uint64(hordeFlagCarrier->GetGUID());
-        data << float(hordeFlagCarrier->GetPositionX());
-        data << float(hordeFlagCarrier->GetPositionY());
-    }
-
-    SendPacket(&data);
+    SendPacket(playerPositions.Write());
 }
 
 void WorldSession::HandlePVPLogDataOpcode(WorldPackets::Battleground::PVPLogDataRequest& /*pvpLogDataRequest*/)
