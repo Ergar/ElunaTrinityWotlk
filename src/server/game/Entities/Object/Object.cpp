@@ -1987,7 +1987,7 @@ TempSummon* Map::SummonCreature(uint32 entry, Position const& pos, SummonPropert
     }
 
     //npcbot: totem emul step 2
-    if (summoner && summoner->IsNPCBot())
+    if (summoner && summoner->IsNPCBot() && !summon->IsTempBot())
         summon->SetCreatorGUID(summoner->GetGUID()); // see TempSummon::InitStats()
     //end npcbot
 
@@ -3128,8 +3128,12 @@ bool WorldObject::IsValidAttackTarget(WorldObject const* target, SpellInfo const
     }
     //end npcbot
 
-    //npcbot
+    //npcbot: allow bots and their summons to ignore this rule
     if (unit && unitTarget && (unit->IsNPCBotOrPet() || unitTarget->IsNPCBotOrPet()))
+    {}
+    else if (unit && unit->GetOwnerGUID() && unit->GetOwnerGUID().IsCreature() && sObjectMgr->GetCreatureTemplate(unit->GetOwnerGUID().GetEntry())->IsNPCBotOrPet())
+    {}
+    else if (unitTarget && unitTarget->GetOwnerGUID() && unitTarget->GetOwnerGUID().IsCreature() && sObjectMgr->GetCreatureTemplate(unitTarget->GetOwnerGUID().GetEntry())->IsNPCBotOrPet())
     {}
     else
     //end npcbot

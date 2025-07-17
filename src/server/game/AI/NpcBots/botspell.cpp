@@ -1,3 +1,4 @@
+#include "botdefine.h"
 #include "botspell.h"
 #include "DBCStores.h"
 #include "Log.h"
@@ -135,7 +136,7 @@ void GenerateBotCustomSpellProcs()
             {
                 if (spellEffectInfo.IsAura())
                 {
-                    TC_LOG_ERROR("scripts", "Bot spell {} has ProcFlags {}, but it's of non-proc aura type, needs a correction", spellInfo.Id, spellInfo.ProcFlags);
+                    BOT_LOG_ERROR("scripts", "Bot spell {} has ProcFlags {}, but it's of non-proc aura type, needs a correction", spellInfo.Id, spellInfo.ProcFlags);
                     break;
                 }
             }
@@ -199,7 +200,7 @@ void GenerateBotCustomSpellProcs()
         botSpellProcOverrides[spellInfo.Id] = std::move(procEntry);
     }
 
-    TC_LOG_INFO("server.loading", ">> Bot spell proc overrides generated for {} spells", uint32(botSpellProcOverrides.size()));
+    BOT_LOG_INFO("server.loading", ">> Bot spell proc overrides generated for {} spells", uint32(botSpellProcOverrides.size()));
 
 }
 
@@ -803,7 +804,7 @@ void GenerateBotCustomSpells()
     sinfo->RangeEntry = sSpellRangeStore.LookupEntry(1); //0 yds
     sinfo->ExplicitTargetMask = TARGET_FLAG_UNIT;
     sinfo->Attributes |= SPELL_ATTR0_ABILITY | SPELL_ATTR0_PASSIVE;
-    sinfo->AttributesEx3 |= SPELL_ATTR3_CAN_PROC_WITH_TRIGGERED;
+    sinfo->AttributesEx3 |= SPELL_ATTR3_CAN_PROC_FROM_PROCS;
     sinfo->AttributesEx4 |= SPELL_ATTR4_DONT_REMOVE_IN_ARENA;
     sinfo->AttributesEx7 |= SPELL_ATTR7_CONSOLIDATED_RAID_BUFF;
 
@@ -842,7 +843,7 @@ void GenerateBotCustomSpells()
     sinfo->Attributes &= ~(SPELL_ATTR0_NOT_SHAPESHIFT);
     sinfo->AttributesEx |= SPELL_ATTR1_CANT_BE_REFLECTED | SPELL_ATTR1_CANT_BE_REDIRECTED | SPELL_ATTR1_NO_THREAT;
     sinfo->AttributesEx2 |= SPELL_ATTR2_CANT_CRIT;
-    sinfo->AttributesEx3 |= SPELL_ATTR3_IGNORE_HIT_RESULT | SPELL_ATTR3_DISABLE_PROC | SPELL_ATTR3_CAN_PROC_WITH_TRIGGERED | SPELL_ATTR3_NO_DONE_BONUS;
+    sinfo->AttributesEx3 |= SPELL_ATTR3_IGNORE_HIT_RESULT | SPELL_ATTR3_DISABLE_PROC | SPELL_ATTR3_CAN_PROC_FROM_PROCS | SPELL_ATTR3_NO_DONE_BONUS;
 
     sinfo->_effects[0].BasePoints = 1;
 
@@ -2089,7 +2090,7 @@ void GenerateBotCustomSpells()
         }
     }
 
-    TC_LOG_INFO("server.loading", ">> Bot spellInfo overrides generated for {} spells", uint32(botSpellInfoOverrides.size()));
+    BOT_LOG_INFO("server.loading", ">> Bot spellInfo overrides generated for {} spells", uint32(botSpellInfoOverrides.size()));
 
     GenerateBotCustomSpellProcs();
 }

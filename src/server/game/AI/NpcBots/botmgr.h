@@ -33,8 +33,8 @@ enum BattlegroundTypeId : uint32;
 enum CurrentSpellTypes : uint8;
 enum DamageEffectType : uint8;
 
-constexpr size_t TargetIconNamesCacheSize = 8u; // Group.h TARGETICONCOUNT
-constexpr size_t BracketsCount = DEFAULT_MAX_LEVEL / 10 + 1; //0-9, 10-19, 20-29, 30-39, 40-49, 50-59, 60-69, 70-79, 80-83
+constexpr size_t TARGET_ICON_NAMES_CACHE_SIZE = 8u; // Group.h TARGETICONCOUNT
+constexpr size_t BRACKETS_COUNT = DEFAULT_MAX_LEVEL / 10 + 1; //0-9, 10-19, 20-29, 30-39, 40-49, 50-59, 60-69, 70-79, 80-83
 
 enum BotMgrDataFlags : uint32
 {
@@ -67,6 +67,7 @@ enum BotRemoveType
     BOT_REMOVE_DISMISS                  = 1,
     BOT_REMOVE_UNSUMMON                 = 2,
     BOT_REMOVE_UNBIND                   = 3,
+    BOT_REMOVE_UNAFFORD                 = 4,
     BOT_REMOVE_BY_DEFAULT               = BOT_REMOVE_LOGOUT
 };
 
@@ -95,9 +96,10 @@ enum BotAttackAngle
 
 typedef std::unordered_map<ObjectGuid /*guid*/, Creature* /*bot*/> BotMap;
 template<typename U>
-using BotBrackets = std::array<U, BracketsCount>;
+using BotBrackets = std::array<U, BRACKETS_COUNT>;
 typedef BotBrackets<uint8> LvlBrackets;
 typedef BotBrackets<uint32> PctBrackets;
+typedef BotBrackets<uint32> ItemLvlBrackets;
 
 class TC_GAME_API BotMgr
 {
@@ -147,6 +149,8 @@ class TC_GAME_API BotMgr
         static bool IsBotHKAchievementsEnabled();
         static uint8 GetMaxClassBots();
         static uint8 GetMaxAccountBots();
+        static uint32 GetGearBankCapacity();
+        static uint32 GetGearBankEquipmentSetsCount();
         static uint8 GetHealTargetIconFlags();
         static uint8 GetTankTargetIconFlags();
         static uint8 GetOffTankTargetIconFlags();
@@ -173,8 +177,15 @@ class TC_GAME_API BotMgr
         static float GetBotWandererSpeedMod();
         static float GetBotWandererXPGainMod();
         static PctBrackets GetBotWandererLevelBrackets();
+        static uint32 GetBotWandererMaxItemLevel(uint8 level);
+        static uint32 GetBotWandererKillRewardMoney();
+        static uint32 GetBotWandererKillRewardItemMaxCount();
+        static uint32 GetBotWandererKillRewardItemMaxQuality();
         static float GetBotDamageModByClass(uint8 botclass);
         static float GetBotDamageModByLevel(uint8 botlevel);
+        static float GetBotHealingModByLevel(uint8 botlevel);
+        static float GetBotHPModByLevel(uint8 botlevel);
+        static float GetBotMPModByLevel(uint8 botlevel);
 
         static uint8 GetFollowDistDefault();
         static uint32 GetEngageDelayDPSDefault();
@@ -203,12 +214,14 @@ class TC_GAME_API BotMgr
         static void OnBotOwnerEnterVehicle(Player const* passenger, Vehicle const* vehicle);
         static void OnBotOwnerExitVehicle(Player const* passenger, Vehicle const* vehicle);
         static void OnBotPartyEngage(Player const* owner);
+        static void OnBotAttackStop(Creature const* bot, Unit const* target);
         //mod hooks
         static void ApplyBotEffectMods(Unit const* caster, SpellInfo const* spellInfo, uint8 effIndex, float& value);
         static void ApplyBotThreatMods(Unit const* attacker, SpellInfo const* spellInfo, float& threat);
         static void ApplyBotEffectValueMultiplierMods(Unit const* caster, SpellInfo const* spellInfo, SpellEffIndex effIndex, float& multiplier);
         static float GetBotDamageTakenMod(Creature const* bot, bool magic);
         static int32 GetBotStat(Creature const* bot, BotStatMods stat);
+        static int32 GetBotStat(Creature const* bot, Stats stat);
         static float GetBotResilience(Creature const* botOrPet);
 
         void LoadData();
@@ -229,6 +242,10 @@ class TC_GAME_API BotMgr
         static uint8 GetMaxNpcBots(uint8 level);
         static uint8 GetNpcBotXpReduction();
         static uint8 GetNpcBotXpReductionStartingNumber();
+        static bool GetNpcBotXpReductionBlizzlikeEnabled();
+        static bool GetNpcBotXpReductionBlizzlikeGroupOnly();
+        static bool GetNpcBotMoneyShareEnabled();
+        static bool GetNpcBotMoneyShareGroupOnly();
         static uint8 GetNpcBotMountLevel60();
         static uint8 GetNpcBotMountLevel100();
         static int32 GetBotInfoPacketsLimit();
@@ -239,13 +256,14 @@ class TC_GAME_API BotMgr
         static void SetBotContestedPvP(Creature const* bot);
         bool IsMapAllowedForBots(Map const* map) const;
         bool RestrictBots(Creature const* bot, bool add) const;
-        bool IsPartyInCombat() const;
+        bool IsPartyInCombat(bool is_pvp) const;
         bool HasBotClass(uint8 botclass) const;
         bool HasBotWithSpec(uint8 spec, bool alive = true) const;
         bool HasBotPetType(uint32 petType) const;
         bool IsBeingResurrected(WorldObject const* corpse) const;
 
-        static uint32 GetNpcBotCost(uint8 level, uint8 botclass);
+        static uint32 GetNpcBotCostRent();
+        static uint32 GetNpcBotCostHire(uint8 level, uint8 botclass);
         static std::string GetNpcBotCostStr(uint8 level, uint8 botclass);
         static uint8 BotClassByClassName(std::string const& className);
         static uint8 GetBotPlayerClass(uint8 bot_class);
@@ -253,6 +271,7 @@ class TC_GAME_API BotMgr
         static uint8 GetBotPlayerClass(Creature const* bot);
         static uint8 GetBotPlayerRace(Creature const* bot);
         static uint8 GetBotEquipmentClass(uint8 bot_class);
+        static BotStatMods GetBotStatModByUnitStat(Stats stat);
 
         std::string GetTargetIconString(uint8 icon_idx) const;
 
@@ -293,6 +312,7 @@ class TC_GAME_API BotMgr
         bool GetBotAllowCombatPositioning() const;
         void SetBotAllowCombatPositioning(bool allow);
 
+        bool GetBotsHidden() const;
         void SetBotsHidden(bool hidden);
 
         uint32 GetEngageDelayDPS() const;
@@ -350,14 +370,16 @@ class TC_GAME_API BotMgr
         Player* const _owner;
         BotMap _bots;
         std::list<ObjectGuid> _removeList;
+        std::list<std::pair<ObjectGuid, BotRemoveType>> _delayedRemoveList;
         DPSTracker* const _dpstracker;
         NpcBotMgrData* _data;
 
         bool _quickrecall;
+        bool _update_lock;
 
         AoeSpotsVec _aoespots;
 
-        std::array<std::string, TargetIconNamesCacheSize> _targetIconNamesCache;
+        std::array<std::string, TARGET_ICON_NAMES_CACHE_SIZE> _targetIconNamesCache;
 };
 
 void AddNpcBotScripts();

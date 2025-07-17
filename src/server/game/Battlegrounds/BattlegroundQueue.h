@@ -83,7 +83,7 @@ class TC_GAME_API BattlegroundQueue
         bool CheckSkirmishForSameFaction(uint32 minPlayersPerTeam);
         GroupQueueInfo* AddGroup(Player* leader, Group const* group, PvPDifficultyEntry const* bracketEntry, bool isRated, bool isPremade, uint32 ArenaRating, uint32 MatchmakerRating, uint32 ArenaTeamId = 0, uint32 OpponentsArenaTeamId = 0);
         //npcbot
-        GroupQueueInfo* AddBotAsGroup(ObjectGuid leaderGuid, uint32 team, BattlegroundTypeId bgTypeId, PvPDifficultyEntry const* bracketEntry, uint8 ArenaType, bool isPremade, uint32 ArenaRating, uint32 MatchmakerRating, uint32 ArenaTeamId = 0, uint32 OpponentsArenaTeamId = 0);
+        GroupQueueInfo* AddBotAsGroup(ObjectGuid leaderGuid, uint32 team, PvPDifficultyEntry const* bracketEntry, bool isPremade, uint32 ArenaRating, uint32 MatchmakerRating, uint32 ArenaTeamId = 0, uint32 OpponentsArenaTeamId = 0);
         bool IsBotInvited(ObjectGuid guid, uint32 bgInstanceGuid) const;
         //end npcbot
         void RemovePlayer(ObjectGuid guid, bool decreaseInvitedCount);

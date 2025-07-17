@@ -949,7 +949,7 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket &recvData)
         if (creatureTemplate && creatureTemplate->IsNPCBot())
         {
             WorldPacket bpdata(SMSG_PARTY_MEMBER_STATS_FULL, 4+2+2+2+1+2*6+8+1+8);
-            BotMgr::BuildBotPartyMemberStatsPacket(Guid, &bpdata);
+            BotMgr::BuildBotPartyMemberStatsPacket(guid, &bpdata);
             SendPacket(&bpdata);
             return;
         }

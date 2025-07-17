@@ -33,6 +33,10 @@
 #include "botmgr.h"
 //end npcbot
 
+//npcbot
+#include "botmgr.h"
+//end npcbot
+
 /*static*/ bool CombatManager::CanBeginCombat(Unit const* a, Unit const* b)
 {
     // Checks combat validity before initial reference creation.

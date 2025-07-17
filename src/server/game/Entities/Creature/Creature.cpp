@@ -1377,6 +1377,11 @@ void Creature::SetLootRecipient(Unit* unit, bool withGroup)
     else
         m_lootRecipientGroup = ObjectGuid::Empty;
 
+    //npcbot: prevent visual tap on owned bots
+    if (IsNPCBotOrPet() && !IsFreeBot())
+        return;
+    //end npcbot
+
     SetDynamicFlag(UNIT_DYNFLAG_TAPPED);
 }
 
@@ -2894,6 +2899,11 @@ bool Creature::CanSwim() const
     if (IsPet())
         return true;
 
+    //npcbot
+    if (IsNPCBotOrPet())
+        return true;
+    //end npcbot
+
     return false;
 }
 
@@ -3821,6 +3831,11 @@ void Creature::ApplyCreatureSpellCastTimeMods(SpellInfo const* spellInfo, int32&
 {
     if (bot_AI)
         bot_AI->ApplyBotSpellCastTimeMods(spellInfo, casttime);
+}
+void Creature::ApplyCreatureSpellNotLoseCastTimeMods(SpellInfo const* spellInfo, int32& delayReduce) const
+{
+    if (bot_AI)
+        bot_AI->ApplyBotSpellNotLoseCastTimeMods(spellInfo, delayReduce);
 }
 void Creature::ApplyCreatureSpellRadiusMods(SpellInfo const* spellInfo, float& radius) const
 {

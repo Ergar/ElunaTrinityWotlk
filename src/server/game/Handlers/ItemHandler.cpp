@@ -648,7 +648,7 @@ void WorldSession::SendListInventory(ObjectGuid vendorGuid)
             uint32 leftInStock = !item->maxcount ? 0xFFFFFFFF : vendor->GetVendorItemCurrentCount(item);
             if (!_player->IsGameMaster()) // ignore conditions if GM on
             {
-                 // npcbot
+                // npcbot
                 if (_player->HaveBot())
                 {
                     if (!(itemTemplate->AllowableClass & (_player->GetClassMask() | _player->GetBotMgr()->GetAllNpcBotsClassMask())) &&

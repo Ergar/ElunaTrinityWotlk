@@ -1127,9 +1127,9 @@ void Battleground::RemoveBotAtLeave(ObjectGuid guid)
         }
 
         // Let others know
-        WorldPacket data;
-        sBattlegroundMgr->BuildPlayerLeftBattlegroundPacket(&data, guid);
-        SendPacketToTeam(team, &data, nullptr, false);
+        WorldPackets::Battleground::BattlegroundPlayerLeft botLeft;
+        botLeft.Guid = guid;
+        SendPacketToTeam(team, botLeft.Write(), nullptr, false);
 
         DecreaseInvitedCount(team);
 
@@ -1137,11 +1137,11 @@ void Battleground::RemoveBotAtLeave(ObjectGuid guid)
         if (isBattleground() && GetStatus() < STATUS_WAIT_LEAVE)
         {
             BattlegroundTypeId bgTypeId = GetTypeID();
-            BattlegroundQueueTypeId bgQueueTypeId = BattlegroundMgr::BGQueueTypeId(bgTypeId, GetArenaType());
+            BattlegroundQueueTypeId bgQueueTypeId = BattlegroundMgr::BGQueueTypeId(bgTypeId, GetBracketId(), GetArenaType());
 
             // a player has left the battleground, so there are free slots -> add to queue
             AddToBGFreeSlotQueue();
-            sBattlegroundMgr->ScheduleQueueUpdate(0, 0, bgQueueTypeId, bgTypeId, GetBracketId());
+            sBattlegroundMgr->ScheduleQueueUpdate(0, bgQueueTypeId);
         }
     }
 
@@ -1288,7 +1288,7 @@ void Battleground::AddPlayer(Player* player)
 void Battleground::AddBot(Creature* bot)
 {
     ObjectGuid guid = bot->GetGUID();
-    uint32 team = (BotDataMgr::GetTeamIdForFaction(bot->GetFaction()) == TEAM_ALLIANCE) ? ALLIANCE : HORDE;
+    uint32 team = !bot->IsFreeBot() ? bot->GetBotOwner()->GetBGTeam() : (BotDataMgr::GetTeamIdForFaction(bot->GetFaction()) == TEAM_ALLIANCE) ? uint32(ALLIANCE) : uint32(HORDE);
 
     // Add to list/maps
     BattlegroundBot bb;
@@ -1297,9 +1297,9 @@ void Battleground::AddBot(Creature* bot)
 
     UpdatePlayersCountByTeam(team, false);                  // +1 player
 
-    WorldPacket data;
-    sBattlegroundMgr->BuildPlayerJoinedBattlegroundPacket(&data, (Player*)bot);
-    SendPacketToTeam(team, &data, nullptr, false);
+    WorldPackets::Battleground::BattlegroundPlayerJoined botJoined;
+    botJoined.Guid = bot->GetGUID();
+    SendPacketToTeam(team, botJoined.Write(), nullptr, false);
 
     AddOrSetBotToCorrectBgGroup(bot, team);
 
@@ -1528,6 +1528,11 @@ void Battleground::BuildPvPLogDataPacket(WorldPackets::Battleground::PVPMatchSta
 
     if (GetStatus() == STATUS_WAIT_LEAVE)
         pvpLogData.Winner = GetWinner();
+
+    //npcbot
+    for (auto const& [_, score] : BotScores)
+        score->AppendToPacket(pvpLogData.Players.emplace_back());
+    //end npcbot
 
     for (auto const& [_, score] : PlayerScores)
         score->AppendToPacket(pvpLogData.Players.emplace_back());
